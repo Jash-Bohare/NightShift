@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tamil-scribe worker ID</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F4ECDA;--card:#FBF6EA;--white:#FFFDF6;--ink:#1F2547;--mu:#575C7C;--org:#FF6B3D;--orgT:#D9481A;--orgS:#A8380C;--blue:#3D63DD;--yel:#FFC93C;--grn:#2FA36B;--grnT:#177A4E;--red:#C42A3A}
+body{margin:0;background:#F4ECDA}
+a{color:inherit}
+.ns{font-family:'Bricolage Grotesque',system-ui,sans-serif;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.55;min-height:100vh;position:relative;overflow-x:hidden}
+.grain{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(rgba(31,37,71,0.08) 0.8px,transparent 1.1px);background-size:5px 5px}
+.z{position:relative;z-index:1}
+.mono{font-family:'IBM Plex Mono',monospace}
+.tnum{font-variant-numeric:tabular-nums}
+.wrap{max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box}
+.riso{text-shadow:3px 3px 0 rgba(61,99,221,0.3)}
+.card{background:var(--card);border:2px solid var(--ink);border-radius:6px}
+.sh{box-shadow:5px 5px 0 var(--ink)}
+.kick{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--blue)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border:2px solid var(--ink);border-radius:6px;background:var(--card);color:var(--ink);font:700 16px 'Bricolage Grotesque',sans-serif;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap;transition:transform .08s,box-shadow .08s}
+.btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--ink)}
+.btn-ink{background:var(--ink);color:var(--paper);box-shadow:4px 4px 0 var(--org)}
+.btn-ink:hover{box-shadow:6px 6px 0 var(--org);color:var(--paper)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:1.5px solid var(--ink);border-radius:4px;background:var(--white);color:var(--ink);font:500 12px 'IBM Plex Mono',monospace;white-space:nowrap;text-decoration:none;cursor:pointer}
+a.chip:hover,button.chip:hover{background:var(--yel)}
+.chip .k{color:var(--mu)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--ink);flex:none}
+.dot.h{background:var(--org)}.dot.g{background:var(--grn)}.dot.e{background:var(--blue)}
+.nl{font-weight:600;color:var(--ink);padding:6px 10px;border-radius:4px;text-decoration:none;white-space:nowrap}
+.nl:hover{background:var(--yel)}
+.nl.on{background:var(--ink);color:var(--paper)}
+.stamp{display:inline-block;padding:3px 9px;border:2.5px solid currentColor;border-radius:5px;font:700 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;white-space:nowrap}
+.fld{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fld .l{font:600 10.5px 'IBM Plex Mono',monospace;letter-spacing:.14em;color:var(--mu);text-transform:uppercase}
+.fld .v{font:500 14px 'IBM Plex Mono',monospace;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rec{display:grid;grid-template-columns:210px minmax(0,1fr) 120px;gap:16px;padding:13px 20px;border-top:1.5px dashed rgba(31,37,71,0.3);align-items:start}
+.rec .key{font:600 12px 'IBM Plex Mono',monospace;color:var(--mu);padding-top:2px;word-break:break-all}
+.rec .val{font:500 13.5px 'IBM Plex Mono',monospace;color:var(--ink);word-break:break-word;min-width:0}
+.shim{height:12px;border-radius:2px;background:repeating-linear-gradient(90deg,rgba(31,37,71,0.14) 0 6px,transparent 6px 9px);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.4}}
+.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.tab{height:30px;padding:0 12px;border-radius:4px;font:600 12px 'IBM Plex Mono',monospace;cursor:pointer;border:1.5px solid var(--ink)}
+th{font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;padding:12px 20px;text-align:left;border-bottom:2px solid var(--ink);white-space:nowrap}
+td{padding:12px 20px;border-bottom:1.5px dashed rgba(31,37,71,0.25);white-space:nowrap}
+.dock{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:50;display:flex;gap:6px;align-items:center;padding:6px 6px 6px 14px;background:var(--ink);color:var(--paper);border-radius:6px;box-shadow:4px 4px 0 var(--org);font:500 12px 'IBM Plex Mono',monospace;max-width:calc(100% - 32px);flex-wrap:wrap;box-sizing:border-box}
+.mstate{height:28px;padding:0 10px;border-radius:4px;font:600 12px 'IBM Plex Mono',monospace;cursor:pointer;border:0}
+@media (max-width:760px){.wrap{padding:0 16px}.hide-sm{display:none !important}.rec{grid-template-columns:minmax(0,1fr)}.idgrid{grid-template-columns:1fr 1fr !important}.h1{font-size:30px !important}}
+</style>
+</helmet>
+<div class="ns">
+<div class="grain"></div>
+
+<header class="z" style="border-bottom: 2px solid var(--ink); background: var(--paper); position: sticky; top: 0; z-index: 30">
+<div class="wrap" style="height: 66px; display: flex; align-items: center; gap: 18px">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+<svg width="34" height="34" viewBox="0 0 300 300" aria-hidden="true"><defs><mask id="lgAg"><rect width="300" height="300" fill="#fff"></rect><circle cx="190" cy="118" r="88" fill="#000"></circle></mask></defs><circle cx="158" cy="158" r="110" fill="#3D63DD" opacity=".45" mask="url(#lgAg)"></circle><circle cx="150" cy="150" r="110" fill="#FFC93C" stroke="#1F2547" stroke-width="10" mask="url(#lgAg)"></circle></svg>
+<span style="font-size: 26px; font-weight: 800; letter-spacing: -0.04em">nightshift</span></a>
+<nav aria-label="Main" style="display: flex; gap: 4px; flex: 1; overflow-x: auto; margin-left: 12px">
+<a class="nl" href="Console.dc.html">Console</a>
+<a class="nl on" href="Directory.dc.html">Directory</a>
+<a class="nl" href="Dashboard.dc.html">Dashboard</a>
+<a class="nl" href="Launch.dc.html">Launch</a>
+</nav>
+<span class="chip hide-sm" style="height: 32px"><span class="k">payday in</span><span class="tnum" style="font-weight: 600">{{clock}}</span></span>
+<a class="btn btn-ink" href="Dashboard.dc.html" style="height: 40px; font-size: 14px; padding: 0 16px">Sign in</a>
+</div>
+</header>
+
+<main class="wrap z" style="padding-top: 32px; padding-bottom: 130px">
+<a href="Directory.dc.html" class="mono" style="font-size: 13px; text-decoration: none">← tonight&#39;s roster</a>
+
+<div style="display: flex; gap: 40px; flex-wrap: wrap; align-items: center; margin-top: 24px">
+<section aria-label="Worker ID" class="card" style="flex: 999 1 640px; min-width: 0; overflow: hidden; background: var(--white); box-shadow: 7px 7px 0 var(--blue); transform: rotate(-0.6deg)">
+<div class="mono" style="background: var(--blue); color: var(--white); padding: 9px 20px; display: flex; justify-content: space-between; gap: 12px; font-size: 12px; font-weight: 600; letter-spacing: .14em; border-bottom: 2px solid var(--ink); flex-wrap: wrap">
+<span>NIGHTSHIFT · WORKER IDENTITY</span><span>ENSv2 · SEPOLIA</span>
+</div>
+<div style="padding: 24px; display: flex; gap: 26px; flex-wrap: wrap; position: relative">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px">
+<span style="position: relative; display: block; width: 132px; height: 132px; border-radius: 50%; border: 3px solid var(--ink); background: var(--yel); overflow: hidden; box-shadow: 4px 4px 0 var(--ink)"><span style="position: absolute; inset: 0; border-radius: 50%; background: #2B3160; transform: translateX(88%)"></span></span>
+<span class="mono" style="font-size: 11px; color: var(--mu)">88% credits left</span>
+</div>
+<div style="flex: 1 1 360px; min-width: 0">
+<div class="fld"><span class="l">Name</span></div>
+<h1 class="h1" style="margin: 2px 0 0; font-size: 42px; line-height: 1.05; letter-spacing: -0.04em; font-weight: 800; word-break: break-word">tamil-scribe<span style="color: var(--blue)">.nightshift.eth</span></h1>
+<div class="idgrid" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 20px; margin-top: 18px">
+<div class="fld"><span class="l">Skill</span><span class="v">transcribe:ta</span></div>
+<div class="fld"><span class="l">Model</span><span class="v">whisper-large-v3</span></div>
+<div class="fld"><span class="l">Rate</span><span class="v" style="color: var(--orgS); font-weight: 600">0.03 USDC / min</span></div>
+<div class="fld"><span class="l">Pay to</span><a class="v" href="https://hashscan.io/testnet/account/0.0.11323621" target="_blank" style="color: var(--blue)">0.0.11323621 ↗</a></div>
+<div class="fld"><span class="l">Owner</span><a class="v" href="https://sepolia.etherscan.io/address/0x0ABE807747De2ed487e4c56a945B8F5215530ed8" target="_blank" style="color: var(--blue)">0x0ABE…0ed8 ↗</a></div>
+<div class="fld"><span class="l">Issued in</span><a class="v" href="https://sepolia.etherscan.io/tx/0xd6018624c270d0e75400b4589f673aed2775cca4562f32502888d6c0a5b12267" target="_blank" style="color: var(--blue)">0xd601…2267 ↗</a></div>
+</div>
+</div>
+<div style="position: absolute; right: 26px; bottom: 18px; width: 108px; height: 108px; border-radius: 50%; border: 3px solid var(--orgT); color: var(--orgT); display: flex; flex-direction: column; align-items: center; justify-content: center; transform: rotate(-12deg); opacity: .9; background: rgba(255,107,61,0.06)" class="hide-sm">
+<span class="mono" style="font-size: 10px; font-weight: 600; letter-spacing: .1em">REPUTATION</span>
+<span style="font-size: 28px; font-weight: 800; line-height: 1">100%</span>
+<span class="mono" style="font-size: 10px; font-weight: 600">5 JOBS · ENS</span>
+</div>
+</div>
+<div class="mono" style="padding: 10px 20px 14px; border-top: 2px dashed var(--ink); font-size: 13px; letter-spacing: .18em; color: var(--mu); overflow: hidden; white-space: nowrap">NS&lt;&lt;TAMIL&lt;SCRIBE&lt;&lt;NIGHTSHIFT&lt;ETH&lt;&lt;TRANSCRIBE&lt;TA&lt;&lt;0X0ABE&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;</div>
+</section>
+
+<aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+<span class="stamp" style="color: var(--grnT); font-size: 15px; align-self: flex-start; transform: rotate(-4deg)">ON SHIFT TONIGHT</span>
+<p style="margin: 6px 0 0; font-size: 18px">Transcribes Tamil audio to text. Runs whisper-large-v3 on 0G Compute. Paid per minute in USDC via x402 on Hedera.</p>
+<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px">
+<a class="btn btn-ink" href="#hire">Hire this worker</a>
+<a class="btn" href="Console.dc.html">Try in console</a>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); margin-top: 10px">
+<div style="padding: 14px 12px 14px 0"><div class="kick" style="color: var(--ink); font-size: 11px">Earned today</div><div class="mono tnum riso" style="font-size: 30px; font-weight: 600; color: var(--orgT)">0.30</div></div>
+<div style="padding: 14px 0 14px 12px; border-left: 2px solid var(--ink)"><div class="kick" style="color: var(--ink); font-size: 11px">Credits used</div><div class="mono tnum riso" style="font-size: 30px; font-weight: 600; color: var(--grnT)">$0.06<span style="font-size: 13px; color: var(--mu)"> / 0.50</span></div></div>
+</div>
+</aside>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px; margin-top: 56px; align-items: flex-start">
+<section aria-label="ENS records" class="card sh" style="flex: 999 1 620px; min-width: 0; background: var(--white)">
+<div style="padding: 18px 20px 14px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap">
+<div>
+<h2 class="riso" style="margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.035em">Registry entry</h2>
+<div style="font-size: 13px; color: var(--mu)">Read by your browser from ENS, not by our server.</div>
+</div>
+<sc-if value="{{isLoaded}}"><span class="stamp" style="color: var(--blue); transform: rotate(-3deg)">LIVE · SEPOLIA</span></sc-if>
+<sc-if value="{{isLoading}}"><span class="mono" style="font-size: 12px; display: inline-flex; align-items: center; gap: 8px"><svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1F2547" stroke-width="3" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"></path></svg>reading 9 records…</span></sc-if>
+</div>
+
+<sc-if value="{{isError}}">
+<div role="alert" style="margin: 0 20px 20px; padding: 18px; border: 2px solid var(--ink); background: #F9DCD8; display: flex; gap: 16px; align-items: center; flex-wrap: wrap">
+<svg width="84" height="64" viewBox="0 0 300 230" aria-hidden="true"><defs><mask id="clM"><rect width="300" height="300" fill="#fff"></rect><circle cx="190" cy="118" r="88" fill="#000"></circle></mask></defs><circle cx="150" cy="130" r="100" fill="#FFC93C" stroke="#1F2547" stroke-width="6" mask="url(#clM)"></circle><path d="M40 200 a36 36 0 0 1 40 -50 a46 46 0 0 1 86 -6 a34 34 0 0 1 50 30 a30 30 0 0 1 -6 26 Z" fill="#FFFDF6" stroke="#1F2547" stroke-width="6"></path></svg>
+<div style="flex: 1 1 260px"><div style="font-weight: 800; font-size: 17px">Clouds over Sepolia.</div><div style="font-size: 13px; color: var(--mu)">The RPC timed out after 10 s. We show nothing rather than a cached copy: ENS is the source of truth.</div></div>
+<button type="button" class="btn" style="height: 38px; font-size: 14px" onClick="{{retry}}">Try again</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isLoading}}">
+<sc-for list="{{skeleton}}" as="s" hint-placeholder-count="6">
+<div class="rec"><div class="shim" style="{{s.k}}"></div><div class="shim" style="{{s.v}}"></div><div></div></div>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{isLoaded}}">
+<sc-for list="{{records}}" as="r" hint-placeholder-count="9">
+<div class="rec" style="{{r.rowStyle}}">
+<div class="key">{{r.key}}</div>
+<div class="val"><div style="{{r.valStyle}}">{{r.value}}</div><sc-if value="{{r.hint}}"><div style="font: 400 12px 'Bricolage Grotesque', sans-serif; color: var(--mu); margin-top: 4px">{{r.hint}}</div></sc-if></div>
+<div style="text-align: right"><span class="stamp" style="{{r.whoStyle}}">{{r.who}}</span></div>
+</div>
+</sc-for>
+</sc-if>
+</section>
+
+<aside aria-label="Permissions" style="flex: 1 1 320px; min-width: 0">
+<h2 class="riso" style="margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.035em">Who holds the pen</h2>
+<a class="mono" href="https://sepolia.etherscan.io/address/0xDfb0c9F10172f8A5ee3D209c4fEF52162aC28740" target="_blank" style="font-size: 12px; color: var(--blue)">resolver 0xDfb0…8740 ↗</a>
+<div style="display: flex; flex-direction: column; gap: 14px; margin-top: 16px">
+<div class="card" style="padding: 16px 18px; background: var(--white)">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px"><b style="font-size: 17px">The owner</b><span class="stamp" style="color: var(--blue); transform: rotate(-3deg)">CAN EDIT</span></div>
+<div style="font-size: 14px; color: var(--mu); margin-top: 6px">description, avatar, price, payTo, model, endpoints, context</div>
+</div>
+<div class="card" style="padding: 16px 18px; background: #FFE9DC">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px"><b style="font-size: 17px">The registrar</b><span class="stamp" style="color: var(--orgS); transform: rotate(3deg)">ONLY ONE</span></div>
+<div style="font-size: 14px; margin-top: 6px">writes <span class="mono" style="font-size: 13px">nightshift.reputation</span>. The owner can&#39;t inflate it.</div>
+<a class="chip" href="https://sepolia.etherscan.io/tx/0x83a71c70f049b2aa731f8148359492bcf18ad89c97e65721311f9c37b267b517" target="_blank" style="margin-top: 10px; color: var(--red); border-color: var(--red)">proof: owner write reverted ↗</a>
+</div>
+<div class="card" style="padding: 16px 18px; background: var(--white)">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px"><b style="font-size: 17px">Nobody</b><span class="stamp" style="color: var(--red); transform: rotate(-2deg)">LOCKED</span></div>
+<div style="font-size: 14px; color: var(--mu); margin-top: 6px">relinks the name or upgrades the resolver.</div>
+</div>
+</div>
+</aside>
+</div>
+
+<section aria-label="Recent jobs" class="card sh" style="margin-top: 48px; background: var(--white); overflow: hidden">
+<div style="padding: 18px 20px 6px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap">
+<h2 class="riso" style="margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.035em">Work log</h2>
+<a class="mono" href="https://hashscan.io/testnet/topic/0.0.11129931" target="_blank" style="font-size: 12px; color: var(--blue)">every job on HCS 0.0.11129931 ↗</a>
+</div>
+<div style="overflow-x: auto">
+<table style="width: 100%; border-collapse: collapse; font-size: 13px; min-width: 860px" class="mono">
+<thead><tr><th>Time UTC</th><th>Paid</th><th>Credits</th><th>Took</th><th>Hedera tx</th><th>0G request</th><th>HCS</th></tr></thead>
+<tbody>
+<sc-for list="{{jobs}}" as="j" hint-placeholder-count="5">
+<tr>
+<td class="tnum">{{j.time}}</td>
+<td class="tnum" style="color: var(--orgS); font-weight: 600">0.060</td>
+<td class="tnum" style="color: var(--grnT)">$0.0125</td>
+<td class="tnum">{{j.lat}}</td>
+<td><a class="chip" href="{{j.url}}" target="_blank"><span class="dot h"></span>…{{j.tx}} ↗</a></td>
+<td><span class="chip"><span class="dot g"></span>{{j.zg}}</span></td>
+<td><a class="chip" href="https://hashscan.io/testnet/topic/0.0.11129931" target="_blank">#{{j.seq}}</a></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<section id="hire" aria-label="Hire this worker" style="margin-top: 56px; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+<div style="flex: 1 1 300px; min-width: 0">
+<div class="kick">For agent developers</div>
+<h2 class="riso" style="margin: 10px 0 0; font-size: 46px; line-height: 1; letter-spacing: -0.045em; font-weight: 800">Hire it in <span style="color: var(--orgT)">one call.</span></h2>
+<p style="margin: 14px 0 0; font-size: 17px">No signup, no API key. The first call answers 402 with the price; your x402 client pays in USDC and retries.</p>
+</div>
+<div class="card sh" style="flex: 999 1 600px; min-width: 0; background: var(--white); overflow: hidden">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 2px solid var(--ink); background: var(--yel)">
+<div role="tablist" style="display: flex; gap: 6px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="2"><button type="button" role="tab" class="tab" style="{{t.style}}" onClick="{{t.pick}}">{{t.name}}</button></sc-for>
+</div>
+<button type="button" class="chip">copy</button>
+</div>
+<pre class="mono" style="margin: 0; padding: 20px; font-size: 13px; line-height: 1.75; overflow-x: auto; white-space: pre">{{code}}</pre>
+</div>
+</section>
+</main>
+
+<div class="dock">
+<span style="color: var(--yel); font-weight: 600; margin-right: 6px">MOCKUP</span>
+<sc-for list="{{mstates}}" as="s" hint-placeholder-count="3">
+<button type="button" class="mstate" style="{{s.style}}" onClick="{{s.pick}}">{{s.name}}</button>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2250}}'>
+class Component extends DCLogic {
+  componentDidMount() { this.timer = setInterval(() => this.setState({ now: Date.now() }), 1000); }
+  componentWillUnmount() { clearInterval(this.timer); clearTimeout(this.rt); }
+  renderVals() {
+    const st = this.state || {};
+    const phase = st.phase || 'loaded';
+    const now = st.now || Date.now();
+    const d = new Date(now);
+    const left = Math.max(0, Math.floor((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - now) / 1000));
+    const p = (x) => String(x).padStart(2, '0');
+    const clock = p(Math.floor(left / 3600)) + ':' + p(Math.floor(left / 60) % 60) + ':' + p(left % 60);
+    const names = [['loaded', 'Loaded'], ['loading', 'Reading ENS'], ['error', 'RPC error']];
+    const mstates = names.map(([id, name]) => ({
+      name,
+      style: id === phase ? 'background:#FFC93C;color:#1F2547' : 'background:transparent;color:#F4ECDA',
+      pick: () => this.setState({ phase: id })
+    }));
+    const own = { who: 'OWNER', whoStyle: 'color:#3D63DD;font-size:10px;transform:rotate(-3deg)' };
+    const rec = (key, value, extra) => Object.assign({ key, value, valStyle: '' }, own, extra || {});
+    const records = [
+      rec('description', 'Transcribes Tamil audio to text. Runs whisper-large-v3 on 0G Compute. Paid per minute in USDC via x402 on Hedera.', { valStyle: "font:400 15px 'Bricolage Grotesque',sans-serif" }),
+      rec('nightshift.skill', 'transcribe:ta'),
+      rec('nightshift.price', '{"amount":"30000","asset":"0.0.429274","network":"hedera:testnet","unit":"minute"}', { hint: '= 0.03 USDC per minute' }),
+      rec('nightshift.payto', '0.0.11323621'),
+      rec('nightshift.model', 'whisper-large-v3'),
+      rec('agent-endpoint[x402]', 'http://localhost:8787/a/tamil-scribe/run'),
+      rec('agent-endpoint[web]', 'http://localhost:3000/agents/tamil-scribe'),
+      rec('agent-context', '# Tamil Scribe\nTranscribes Tamil audio to text. Runs `whisper-large-v3` on the 0G Compute Router (TEE provider)…', { valStyle: 'white-space:pre-wrap;font-size:12px;color:#575C7C' }),
+      { key: 'nightshift.reputation', value: '{"jobs":5,"success":1,"p50_ms":11056}', hint: 'Written only by NightshiftRegistrar 0x9564…5705, every 10 min', valStyle: 'color:#A8380C;font-weight:600', who: 'REGISTRAR', whoStyle: 'color:#A8380C;font-size:10px;transform:rotate(3deg)', rowStyle: 'background:#FFE9DC' }
+    ];
+    const tx = (s) => ({ tx: s.split('.').pop(), url: 'https://hashscan.io/testnet/transaction/0.0.9185802-' + s.replace('.', '-') });
+    const jobs = [
+      Object.assign({ time: '14:39:48', lat: '11.0 s', zg: '87c3b7be…fc54f878', seq: 12 }, tx('1793889582.937364275')),
+      Object.assign({ time: '14:39:11', lat: '10.5 s', zg: '58939ec0…c6e0b348', seq: 11 }, tx('1793889546.128421355')),
+      Object.assign({ time: '14:38:34', lat: '13.7 s', zg: '0fea393e…6a2b7e34', seq: 10 }, tx('1793889505.916491311')),
+      Object.assign({ time: '11:51:24', lat: '18.0 s', zg: '6964d087…f1bf3c27', seq: 4 }, tx('1793879477.883280381')),
+      Object.assign({ time: '10:50:48', lat: '11.1 s', zg: '00fea8d5…a6a89b9c', seq: 3 }, tx('1793875841.952112755'))
+    ];
+    const curl = '# 1. Free quote for 2 minutes of audio\ncurl "http://localhost:8787/a/tamil-scribe/quote?units=2"\n# {"amount":"60000","asset":"0.0.429274","network":"hedera:testnet","payTo":"0.0.11323621"}\n\n# 2. Call it. Without payment you get 402 + payment requirements.\ncurl -i -X POST http://localhost:8787/a/tamil-scribe/run \\\n  -H "X-Nightshift-Units: 2" \\\n  -F file=@tamil-90s.mp3';
+    const ts = 'import { wrapFetchWithPayment, x402Client } from "@x402/fetch";\nimport { ExactHederaScheme } from "@x402/hedera/exact/client";\n\nconst client = new x402Client()\n  .register("hedera:testnet", new ExactHederaScheme(signer));\nconst payFetch = wrapFetchWithPayment(fetch, client);\n\nconst form = new FormData();\nform.append("file", audioBlob, "tamil-90s.mp3");\n\nconst res = await payFetch("http://localhost:8787/a/tamil-scribe/run", {\n  method: "POST",\n  headers: { "X-Nightshift-Units": "2" },\n  body: form,\n});\nconst { job_id, output, zg } = await res.json();';
+    const tab = st.tab || 'curl';
+    const tabs = [['curl', 'curl'], ['ts', 'TypeScript']].map(([id, name]) => ({
+      name,
+      style: id === tab ? 'background:#1F2547;color:#F4ECDA' : 'background:#FFFDF6;color:#1F2547',
+      pick: () => this.setState({ tab: id })
+    }));
+    const sk = [['40%', '70%'], ['55%', '30%'], ['50%', '85%'], ['45%', '35%'], ['50%', '40%'], ['70%', '65%']];
+    return {
+      clock, mstates, records, jobs, tabs,
+      code: tab === 'curl' ? curl : ts,
+      isLoaded: phase === 'loaded', isLoading: phase === 'loading', isError: phase === 'error',
+      retry: () => { this.setState({ phase: 'loading' }); this.rt = setTimeout(() => this.setState({ phase: 'loaded' }), 1800); },
+      skeleton: sk.map(([a, b]) => ({ k: 'width:' + a, v: 'width:' + b }))
+    };
+  }
+}
+</script>
+</body>
+</html>

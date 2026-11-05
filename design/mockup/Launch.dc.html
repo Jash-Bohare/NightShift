@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Launch application</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F4ECDA;--card:#FBF6EA;--white:#FFFDF6;--ink:#1F2547;--mu:#575C7C;--org:#FF6B3D;--orgT:#D9481A;--orgS:#A8380C;--blue:#3D63DD;--yel:#FFC93C;--grn:#2FA36B;--grnT:#177A4E;--red:#C42A3A}
+body{margin:0;background:#F4ECDA}
+a{color:inherit}
+.ns{font-family:'Bricolage Grotesque',system-ui,sans-serif;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.55;min-height:100vh;position:relative;overflow-x:hidden}
+.grain{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(rgba(31,37,71,0.08) 0.8px,transparent 1.1px);background-size:5px 5px}
+.z{position:relative;z-index:1}
+.mono{font-family:'IBM Plex Mono',monospace}
+.tnum{font-variant-numeric:tabular-nums}
+.wrap{max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box}
+.riso{text-shadow:3px 3px 0 rgba(61,99,221,0.3)}
+.card{background:var(--card);border:2px solid var(--ink);border-radius:6px}
+.sh{box-shadow:5px 5px 0 var(--ink)}
+.kick{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--blue)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:50px;padding:0 22px;border:2px solid var(--ink);border-radius:6px;background:var(--card);color:var(--ink);font:700 16px 'Bricolage Grotesque',sans-serif;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap;transition:transform .08s,box-shadow .08s}
+.btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--ink)}
+.btn-ink{background:var(--ink);color:var(--paper);box-shadow:4px 4px 0 var(--org)}
+.btn-ink:hover{box-shadow:6px 6px 0 var(--org);color:var(--paper)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:1.5px solid var(--ink);border-radius:4px;background:var(--white);color:var(--ink);font:500 12px 'IBM Plex Mono',monospace;white-space:nowrap;text-decoration:none;cursor:pointer}
+a.chip:hover,button.chip:hover{background:var(--yel)}
+.chip .k{color:var(--mu)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--ink);flex:none}
+.dot.h{background:var(--org)}.dot.g{background:var(--grn)}.dot.e{background:var(--blue)}
+.nl{font-weight:600;color:var(--ink);padding:6px 10px;border-radius:4px;text-decoration:none;white-space:nowrap}
+.nl:hover{background:var(--yel)}
+.nl.on{background:var(--ink);color:var(--paper)}
+.stamp{display:inline-block;padding:3px 9px;border:2.5px solid currentColor;border-radius:5px;font:700 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;white-space:nowrap}
+.f{display:flex;flex-direction:column;gap:6px}
+.f>.l{font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.14em;text-transform:uppercase}
+.line{height:48px;border:0;border-bottom:2.5px solid var(--ink);background:transparent;color:var(--ink);font:500 18px 'IBM Plex Mono',monospace;padding:0 4px;box-sizing:border-box;width:100%;outline:none}
+.line:focus{background:rgba(255,201,60,0.25)}
+.help{font-size:13px;color:var(--mu)}
+.opt{display:flex;flex-direction:column;gap:6px;text-align:left;padding:16px 18px;border:2px solid var(--ink);border-radius:6px;background:var(--white);cursor:pointer;font-family:'Bricolage Grotesque',sans-serif;color:var(--ink)}
+.enter{animation:enter .4s cubic-bezier(.2,.7,.2,1) both}
+@keyframes enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.stampin{animation:stampin .4s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes stampin{from{opacity:0;transform:scale(1.8) rotate(-14deg)}to{opacity:1;transform:scale(1) rotate(-6deg)}}
+.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.sway{animation:sway 5s ease-in-out infinite;transform-origin:50% 60%}
+@keyframes sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+input[type=range]{accent-color:#1F2547;width:100%}
+.dock{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:50;display:flex;gap:6px;align-items:center;padding:6px 6px 6px 14px;background:var(--ink);color:var(--paper);border-radius:6px;box-shadow:4px 4px 0 var(--org);font:500 12px 'IBM Plex Mono',monospace;max-width:calc(100% - 32px);flex-wrap:wrap;box-sizing:border-box}
+.mstate{height:28px;padding:0 10px;border-radius:4px;font:600 12px 'IBM Plex Mono',monospace;cursor:pointer;border:0}
+@media (max-width:760px){.wrap{padding:0 16px}.hide-sm{display:none !important}.h1{font-size:44px !important}}
+</style>
+</helmet>
+<div class="ns">
+<div class="grain"></div>
+
+<header class="z" style="border-bottom: 2px solid var(--ink); background: var(--paper); position: sticky; top: 0; z-index: 30">
+<div class="wrap" style="height: 66px; display: flex; align-items: center; gap: 18px">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+<svg width="34" height="34" viewBox="0 0 300 300" aria-hidden="true"><defs><mask id="lgL"><rect width="300" height="300" fill="#fff"></rect><circle cx="190" cy="118" r="88" fill="#000"></circle></mask></defs><circle cx="158" cy="158" r="110" fill="#3D63DD" opacity=".45" mask="url(#lgL)"></circle><circle cx="150" cy="150" r="110" fill="#FFC93C" stroke="#1F2547" stroke-width="10" mask="url(#lgL)"></circle></svg>
+<span style="font-size: 26px; font-weight: 800; letter-spacing: -0.04em">nightshift</span></a>
+<nav aria-label="Main" style="display: flex; gap: 4px; flex: 1; overflow-x: auto; margin-left: 12px">
+<a class="nl" href="Console.dc.html">Console</a>
+<a class="nl" href="Directory.dc.html">Directory</a>
+<a class="nl" href="Dashboard.dc.html">Dashboard</a>
+<a class="nl on" href="Launch.dc.html" aria-current="page">Launch</a>
+</nav>
+<span class="chip" style="height: 36px; padding: 0 10px 0 4px"><span style="position: relative; display: inline-block; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--yel); overflow: hidden"><span style="position: absolute; inset: 0; border-radius: 50%; background: #2B3160; transform: translateX(60%)"></span></span>0x0ABE…0ed8</span>
+</div>
+</header>
+
+<main class="wrap z" style="padding-top: 44px; padding-bottom: 130px">
+<div class="kick">Form NS-1 · application for a night shift</div>
+<h1 class="h1 riso" style="margin: 10px 0 0; font-size: 64px; line-height: 0.95; letter-spacing: -0.05em; font-weight: 800">Put tonight&#39;s credits <span style="color: var(--orgT)">to work.</span></h1>
+<p style="margin: 12px 0 0; font-size: 18px">Four boxes, about two minutes. Most of it is waiting for Sepolia.</p>
+
+<div style="display: flex; flex-wrap: wrap; gap: 36px; margin-top: 36px; align-items: flex-start">
+<section style="flex: 999 1 600px; min-width: 0">
+<div role="tablist" aria-label="Form sections" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: -2px; position: relative; z-index: 2">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="4"><span style="{{s.tab}}"><span class="mono" style="font-weight: 600">{{s.n}}</span> {{s.title}}</span></sc-for>
+</div>
+<div class="card sh" style="background: var(--white); padding: 34px 32px; border-top-left-radius: 0">
+
+<sc-if value="{{s1}}">
+<div class="enter">
+<h2 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.03em">1 · Who&#39;s applying</h2>
+<p class="help" style="margin: 6px 0 0">Your worker spends your 0G credits, so we start with your account.</p>
+<div style="margin-top: 26px; display: flex; flex-direction: column; gap: 22px">
+<div class="f"><span class="l">Signed in with Privy</span><div class="line" style="display: flex; align-items: center; gap: 10px">0x0ABE…0ed8 <span class="stamp" style="color: var(--grnT); font-size: 10px; transform: rotate(-3deg)">VERIFIED</span></div><span class="help">This wallet will own the ENS name.</span></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 22px">
+<div class="f"><span class="l">0G credit balance</span><div class="line tnum" style="display: flex; align-items: center; color: var(--grnT); font-size: 26px; font-weight: 600">$4.80</div><span class="help">from /v1/account/balance</span></div>
+<div class="f"><span class="l">Unused credits expire in</span><div class="line tnum" style="display: flex; align-items: center; color: var(--orgT); font-size: 26px; font-weight: 600">{{clock}}</div><span class="help">at 00:00 UTC</span></div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{s2}}">
+<div class="enter">
+<h2 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.03em">2 · What will it sell?</h2>
+<p class="help" style="margin: 6px 0 0">Each skill runs on a model through the 0G Router.</p>
+<div style="margin-top: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px">
+<button type="button" class="opt" style="background: #FFF2B8; box-shadow: 4px 4px 0 var(--ink)">
+<span style="display: flex; justify-content: space-between; width: 100%"><b style="font-size: 18px">Tamil transcription</b><span style="width: 20px; height: 20px; border: 2px solid var(--ink); border-radius: 3px; background: var(--ink); color: var(--paper); font-size: 13px; display: flex; align-items: center; justify-content: center">✓</span></span>
+<span class="mono" style="font-size: 12px">transcribe:ta · whisper-large-v3</span>
+<span class="mono" style="font-size: 12px; color: var(--grnT)">≈ $0.0078 of credits / min</span>
+</button>
+<button type="button" class="opt">
+<span style="display: flex; justify-content: space-between; width: 100%"><b style="font-size: 18px">Hindi transcription</b><span style="width: 20px; height: 20px; border: 2px solid var(--ink); border-radius: 3px"></span></span>
+<span class="mono" style="font-size: 12px">transcribe:hi · whisper-large-v3</span>
+<span class="mono" style="font-size: 12px; color: var(--grnT)">≈ $0.0078 of credits / min</span>
+</button>
+<button type="button" class="opt">
+<span style="display: flex; justify-content: space-between; width: 100%"><b style="font-size: 18px">English transcription</b><span style="width: 20px; height: 20px; border: 2px solid var(--ink); border-radius: 3px"></span></span>
+<span class="mono" style="font-size: 12px">transcribe:en · whisper-large-v3</span>
+<span class="mono" style="font-size: 12px; color: var(--grnT)">≈ $0.0078 of credits / min</span>
+</button>
+<button type="button" class="opt" disabled="" style="border-style: dashed; opacity: 0.55; cursor: not-allowed">
+<span style="display: flex; justify-content: space-between; width: 100%; align-items: center"><b style="font-size: 18px">Read documents</b><span class="stamp" style="color: var(--mu); font-size: 10px; transform: rotate(4deg)">SOON</span></span>
+<span class="mono" style="font-size: 12px">ocr · Tamil and Hindi scans</span>
+</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{s3}}">
+<div class="enter">
+<h2 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.03em">3 · Name and price</h2>
+<p class="help" style="margin: 6px 0 0">The name is how buyer agents find and check your worker. It can&#39;t be reused later.</p>
+<div style="margin-top: 26px; display: flex; flex-direction: column; gap: 26px">
+<label class="f"><span class="l">Worker name</span>
+<span style="display: flex; align-items: center; border-bottom: 2.5px solid var(--ink); height: 52px; gap: 2px">
+<input class="mono" value="tamil-scribe" aria-label="Worker label" style="background: transparent; border: 0; color: var(--ink); font-size: 22px; font-weight: 600; flex: 0 1 190px; min-width: 60px; outline: none">
+<span class="mono" style="color: var(--blue); font-size: 22px; flex: 1">.nightshift.eth</span>
+<span class="stamp" style="color: var(--grnT); font-size: 11px; transform: rotate(-4deg)">AVAILABLE</span>
+</span>
+<span class="help">Checked live with registrar.available on Sepolia.</span>
+</label>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 22px">
+<label class="f"><span class="l">Price per minute (USDC)</span><input class="line tnum" value="0.03" style="color: var(--orgS); font-size: 22px; font-weight: 600"><span class="help">Suggested 0.03 · 4× the credit cost</span></label>
+<div class="f"><span class="l">A 2-minute job</span><div class="line mono tnum" style="display: flex; align-items: center; font-size: 16px">earns 0.06 · uses $0.0125</div><span class="help">you keep 90% of earnings</span></div>
+</div>
+<label class="f"><span class="l">Description</span>
+<textarea rows="2" style="border: 0; border-bottom: 2.5px solid var(--ink); background: transparent; color: var(--ink); font: 400 17px 'Bricolage Grotesque', sans-serif; resize: vertical; padding: 6px 4px; outline: none">Transcribes Tamil audio to text. Runs whisper-large-v3 on 0G Compute. Paid per minute in USDC via x402 on Hedera.</textarea>
+<span class="help">Written to the ENS description record. Your wallet can change it later.</span>
+</label>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{s4}}">
+<div class="enter">
+<h2 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.03em">4 · Budget and keys</h2>
+<p class="help" style="margin: 6px 0 0">The budget guard refuses any job that would cross this cap, before the buyer pays.</p>
+<div style="margin-top: 26px; display: flex; flex-direction: column; gap: 26px">
+<div style="padding: 20px; border: 2px solid var(--ink); background: #E6F1E2; border-radius: 6px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px"><span class="mono" style="font-size: 11px; font-weight: 600; letter-spacing: .14em">DAILY CREDIT CAP</span><span class="mono tnum" style="font-size: 30px; font-weight: 600; color: var(--grnT)">$0.50</span></div>
+<input type="range" min="0" max="100" value="40" aria-label="Daily cap" style="margin-top: 12px">
+<div class="mono" style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px"><span>≈ 64 min of audio a day</span><span>10% of your balance</span></div>
+</div>
+<label class="f"><span class="l">0G API key</span><input class="line" type="password" value="sk-0000000000000000000000" autocomplete="off"><span class="help">Create one at pc.0g.ai → API Keys, label it nightshift-tamil-scribe. Encrypted, kept on our server only.</span></label>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 22px">
+<label class="f"><span class="l">Management key · optional</span><input class="line" placeholder="mk-…" autocomplete="off"><span class="help">Read-only, for your live balance.</span></label>
+<label class="f"><span class="l">Payout account · optional</span><input class="line" placeholder="0.0.…"><span class="help">Leave empty and we create one.</span></label>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isProgress}}">
+<div class="enter">
+<h2 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.03em">Processing your application…</h2>
+<p class="help" style="margin: 6px 0 0">Keep this tab open. Minting on Sepolia takes about 12 seconds.</p>
+<ol class="mono" style="list-style: none; margin: 24px 0 0; padding: 0; border-top: 2px solid var(--ink)">
+<sc-for list="{{progress}}" as="p" hint-placeholder-count="5">
+<li style="display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; padding: 14px 0; border-bottom: 1.5px dashed rgba(31,37,71,0.3); align-items: center">
+<span>
+<sc-if value="{{p.done}}"><span style="color: var(--grnT); font-weight: 600">✓</span></sc-if>
+<sc-if value="{{p.active}}"><svg class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D9481A" stroke-width="3" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"></path></svg></sc-if>
+<sc-if value="{{p.todo}}"><span style="color: var(--mu)">○</span></sc-if>
+</span>
+<span style="min-width: 0"><span style="{{p.titleStyle}}">{{p.title}}</span><span style="display: block; font-size: 12px; color: var(--mu)">{{p.note}}</span></span>
+<span><sc-if value="{{p.showLink}}"><a class="chip" href="{{p.link}}" target="_blank"><span class="{{p.dot}}"></span>{{p.v}} ↗</a></sc-if></span>
+</li>
+</sc-for>
+</ol>
+</div>
+</sc-if>
+
+<sc-if value="{{isDone}}">
+<div class="enter" style="display: flex; gap: 24px; flex-wrap: wrap; align-items: center">
+<svg class="sway" width="170" height="170" viewBox="0 0 300 300" aria-hidden="true">
+<defs><mask id="dnM"><rect width="300" height="300" fill="#fff"></rect><circle cx="190" cy="118" r="88" fill="#000"></circle></mask></defs>
+<circle cx="157" cy="157" r="110" fill="#3D63DD" opacity=".42" mask="url(#dnM)"></circle>
+<circle cx="150" cy="150" r="110" fill="#FFC93C" mask="url(#dnM)"></circle>
+<path d="M78 72 Q128 18 196 34 Q172 52 156 92 Q118 72 78 72 Z" fill="#FF6B3D" stroke="#1F2547" stroke-width="4"></path>
+<circle cx="202" cy="34" r="12" fill="#F4ECDA" stroke="#1F2547" stroke-width="4"></circle>
+<path d="M66 146 Q78 134 92 146" stroke="#1F2547" stroke-width="5" fill="none" stroke-linecap="round"></path>
+<circle cx="62" cy="168" r="10" fill="#FF6B3D" opacity=".6"></circle>
+<path d="M70 180 Q90 206 112 178 Z" fill="#1F2547" stroke="#1F2547" stroke-width="4" stroke-linejoin="round"></path>
+<path d="M120 222 q20 -30 40 -20" stroke="#1F2547" stroke-width="5" fill="none" stroke-linecap="round"></path>
+<circle cx="166" cy="198" r="12" fill="#FFC93C" stroke="#1F2547" stroke-width="4"></circle>
+</svg>
+<div style="flex: 1 1 300px">
+<span class="stamp stampin" style="color: var(--grnT); font-size: 18px">APPROVED · ON SHIFT</span>
+<h2 style="margin: 16px 0 0; font-size: 34px; line-height: 1.05; font-weight: 800; letter-spacing: -0.04em">tamil-scribe<span style="color: var(--blue)">.nightshift.eth</span> is working tonight.</h2>
+<p style="margin: 10px 0 0">Buyer agents can find it now. It works until its cap or midnight, whichever comes first.</p>
+<div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 16px">
+<a class="chip" href="https://sepolia.etherscan.io/tx/0xd6018624c270d0e75400b4589f673aed2775cca4562f32502888d6c0a5b12267" target="_blank"><span class="dot e"></span><span class="k">minted</span>0xd601…2267 ↗</a>
+<a class="chip" href="https://sepolia.etherscan.io/address/0xDfb0c9F10172f8A5ee3D209c4fEF52162aC28740" target="_blank"><span class="dot e"></span><span class="k">resolver</span>0xDfb0…8740 ↗</a>
+<a class="chip" href="https://hashscan.io/testnet/account/0.0.11323621" target="_blank"><span class="dot h"></span><span class="k">payTo</span>0.0.11323621 ↗</a>
+</div>
+<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px">
+<a class="btn btn-ink" href="Dashboard.dc.html">Open dashboard</a>
+<a class="btn" href="Console.dc.html">Send it a test job →</a>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{showNav}}">
+<div style="display: flex; justify-content: space-between; gap: 12px; margin-top: 34px; padding-top: 22px; border-top: 2px dashed var(--ink)">
+<button type="button" class="btn" onClick="{{back}}">← Back</button>
+<button type="button" class="btn btn-ink" onClick="{{next}}">{{nextLabel}} →</button>
+</div>
+</sc-if>
+</div>
+</section>
+
+<aside style="flex: 1 1 300px; min-width: 0; max-width: 380px">
+<div class="kick" style="margin-bottom: 10px">Your worker ID, as it will print</div>
+<div class="card" style="background: var(--white); overflow: hidden; box-shadow: 6px 6px 0 var(--blue); transform: rotate(1deg)">
+<div class="mono" style="background: var(--blue); color: var(--white); padding: 7px 14px; font-size: 11px; font-weight: 600; letter-spacing: .14em; border-bottom: 2px solid var(--ink)">NIGHTSHIFT · WORKER ID</div>
+<div style="padding: 18px; display: flex; gap: 14px; align-items: center">
+<span style="position: relative; display: inline-block; width: 60px; height: 60px; border-radius: 50%; border: 2.5px solid var(--ink); background: var(--yel); overflow: hidden; flex: none"><span style="position: absolute; inset: 0; border-radius: 50%; background: #2B3160; transform: translateX(100%)"></span></span>
+<div style="min-width: 0"><div style="font-weight: 800; font-size: 20px; letter-spacing: -0.03em">tamil-scribe</div><div class="mono" style="font-size: 12px; color: var(--blue)">.nightshift.eth</div></div>
+</div>
+<div class="mono" style="padding: 0 18px 16px; font-size: 13px; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between"><span style="color: var(--mu)">skill</span><span>transcribe:ta</span></div>
+<div style="display: flex; justify-content: space-between"><span style="color: var(--mu)">rate</span><span style="color: var(--orgS); font-weight: 600">0.03 / min</span></div>
+<div style="display: flex; justify-content: space-between"><span style="color: var(--mu)">cap</span><span style="color: var(--grnT); font-weight: 600">$0.50 / day</span></div>
+<div style="display: flex; justify-content: space-between"><span style="color: var(--mu)">owner</span><span>0x0ABE…0ed8</span></div>
+</div>
+<div class="mono" style="padding: 8px 18px; border-top: 2px dashed var(--ink); font-size: 11px; letter-spacing: .16em; color: var(--mu); white-space: nowrap; overflow: hidden">NS&lt;&lt;TAMIL&lt;SCRIBE&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;</div>
+</div>
+<p style="margin: 18px 0 0; font-size: 14px; color: var(--mu)">Full moon tonight: a new worker starts with all its credits.</p>
+</aside>
+</div>
+</main>
+
+<div class="dock">
+<span style="color: var(--yel); font-weight: 600; margin-right: 6px">MOCKUP</span>
+<sc-for list="{{mstates}}" as="s" hint-placeholder-count="6">
+<button type="button" class="mstate" style="{{s.style}}" onClick="{{s.pick}}">{{s.name}}</button>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+  componentDidMount() { this.timer = setInterval(() => this.setState({ now: Date.now() }), 1000); }
+  componentWillUnmount() { clearInterval(this.timer); this.clearRun(); }
+  clearRun() { (this.rt || []).forEach(clearTimeout); this.rt = []; }
+  go(step, pIdx) { this.clearRun(); this.setState({ step, pIdx: pIdx === undefined ? 2 : pIdx }); }
+  launch() {
+    this.go('progress', 0);
+    [700, 1500, 4200, 5000, 5600].forEach((t, i) => this.rt.push(setTimeout(() => this.setState({ pIdx: i + 1 }), t)));
+    this.rt.push(setTimeout(() => this.setState({ step: 'done' }), 6400));
+  }
+  renderVals() {
+    const st = this.state || {};
+    const step = st.step || 3;
+    const pIdx = st.pIdx === undefined ? 2 : st.pIdx;
+    const now = st.now || Date.now();
+    const d = new Date(now);
+    const left = Math.max(0, Math.floor((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - now) / 1000));
+    const p = (x) => String(x).padStart(2, '0');
+    const clock = p(Math.floor(left / 3600)) + ':' + p(Math.floor(left / 60) % 60) + ':' + p(left % 60);
+    const names = [[1, 'Connect'], [2, 'Skill'], [3, 'Name'], [4, 'Budget'], ['progress', 'Launching'], ['done', 'Live']];
+    const mstates = names.map(([id, name]) => ({
+      name,
+      style: id === step ? 'background:#FFC93C;color:#1F2547' : 'background:transparent;color:#F4ECDA',
+      pick: () => this.go(id)
+    }));
+    const n = typeof step === 'number' ? step : 5;
+    const steps = ['Connect', 'Skill', 'Name & price', 'Budget & keys'].map((title, i) => {
+      const k = i + 1, done = k < n, cur = k === n;
+      return {
+        n: done ? '✓' : '0' + k, title,
+        tab: 'display:inline-flex;gap:6px;align-items:center;padding:9px 14px;border:2px solid #1F2547;border-bottom:0;border-radius:6px 6px 0 0;font-weight:700;font-size:14px;' + (cur ? 'background:#FFFDF6' : done ? 'background:#DDEFD9' : 'background:#EDE3CC;color:#575C7C')
+      };
+    });
+    const items = [
+      { title: 'Testing your 0G key', note: 'key works · balance $4.80' },
+      { title: 'Creating the worker’s Hedera account', v: '0.0.11323621', dot: 'dot h', link: 'https://hashscan.io/testnet/account/0.0.11323621', note: 'USDC auto-association on' },
+      { title: 'Minting tamil-scribe.nightshift.eth', v: '0xd601…2267', dot: 'dot e', link: 'https://sepolia.etherscan.io/tx/0xd6018624c270d0e75400b4589f673aed2775cca4562f32502888d6c0a5b12267', note: 'name, own resolver and 8 records in one tx' },
+      { title: 'Encrypting your keys', note: 'AES-256-GCM, server side only' },
+      { title: 'Adding it to tonight’s roster', note: 'buyer agents can find it now' }
+    ];
+    const progress = items.map((it, i) => {
+      const done = i < pIdx, active = i === pIdx;
+      return Object.assign({}, it, {
+        done, active, todo: !done && !active,
+        showLink: !!it.link && (done || active),
+        note: active ? (i === 2 ? 'waiting for confirmation · usually about 12 s' : 'working…') : it.note,
+        titleStyle: 'font-weight:600;font-size:14px;color:' + (done || active ? '#1F2547' : '#575C7C')
+      });
+    });
+    const isNum = typeof step === 'number';
+    return {
+      clock, mstates, steps, progress,
+      s1: step === 1, s2: step === 2, s3: step === 3, s4: step === 4,
+      isProgress: step === 'progress', isDone: step === 'done',
+      showNav: isNum,
+      nextLabel: step === 4 ? 'Submit and clock in' : 'Continue',
+      back: () => this.go(Math.max(1, (isNum ? step : 4) - 1)),
+      next: () => step === 4 ? this.launch() : this.go(Math.min(4, step + 1))
+    };
+  }
+}
+</script>
+</body>
+</html>

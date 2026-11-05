@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Buyer console</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=Noto+Sans+Tamil:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+:root{--paper:#F4ECDA;--card:#FBF6EA;--white:#FFFDF6;--ink:#1F2547;--mu:#575C7C;--org:#FF6B3D;--orgT:#D9481A;--orgS:#A8380C;--blue:#3D63DD;--yel:#FFC93C;--grn:#2FA36B;--grnT:#177A4E;--red:#C42A3A}
+body{margin:0;background:#F4ECDA}
+a{color:inherit}
+.ns{font-family:'Bricolage Grotesque',system-ui,sans-serif;color:var(--ink);background:var(--paper);-webkit-font-smoothing:antialiased;font-size:15px;line-height:1.55;min-height:100vh;position:relative;overflow-x:hidden}
+.grain{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(rgba(31,37,71,0.08) 0.8px,transparent 1.1px);background-size:5px 5px}
+.z{position:relative;z-index:1}
+.mono{font-family:'IBM Plex Mono',monospace}
+.tnum{font-variant-numeric:tabular-nums}
+.wrap{max-width:1200px;margin:0 auto;padding:0 32px;box-sizing:border-box}
+.riso{text-shadow:3px 3px 0 rgba(61,99,221,0.3)}
+.card{background:var(--card);border:2px solid var(--ink);border-radius:6px}
+.sh{box-shadow:5px 5px 0 var(--ink)}
+.kick{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--blue)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border:2px solid var(--ink);border-radius:6px;background:var(--card);color:var(--ink);font:700 16px 'Bricolage Grotesque',sans-serif;cursor:pointer;text-decoration:none;box-sizing:border-box;white-space:nowrap;transition:transform .08s,box-shadow .08s}
+.btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 var(--ink)}
+.btn-ink{background:var(--ink);color:var(--paper);box-shadow:4px 4px 0 var(--org)}
+.btn-ink:hover{box-shadow:6px 6px 0 var(--org);color:var(--paper)}
+.btn-org{background:var(--org);box-shadow:4px 4px 0 var(--ink)}
+.btn[disabled]{opacity:.7;cursor:progress}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 8px;border:1.5px solid var(--ink);border-radius:4px;background:var(--white);color:var(--ink);font:500 12px 'IBM Plex Mono',monospace;white-space:nowrap;text-decoration:none}
+a.chip:hover{background:var(--yel)}
+.chip .k{color:var(--mu)}
+.nl{font-weight:600;color:var(--ink);padding:6px 10px;border-radius:4px;text-decoration:none;white-space:nowrap}
+.nl:hover{background:var(--yel)}
+.nl.on{background:var(--ink);color:var(--paper)}
+.stamp{display:inline-block;padding:3px 9px;border:2.5px solid currentColor;border-radius:5px;font:700 12px 'IBM Plex Mono',monospace;letter-spacing:.08em;white-space:nowrap}
+.enter{animation:enter .4s cubic-bezier(.2,.7,.2,1) both}
+@keyframes enter{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.stampin{animation:stampin .35s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes stampin{from{opacity:0;transform:scale(1.8) rotate(-12deg)}to{opacity:1;transform:scale(1) rotate(-5deg)}}
+.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.flow{stroke-dasharray:7 7;animation:flow .6s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-14}}
+.peek{animation:peek 4s ease-in-out infinite;transform-origin:50% 100%}
+@keyframes peek{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-6px) rotate(4deg)}}
+.ta{font-family:'Noto Sans Tamil','Bricolage Grotesque',sans-serif}
+.select{height:48px;border:2px solid var(--ink);border-radius:6px;background:var(--white);color:var(--ink);padding:0 12px;font:600 15px 'Bricolage Grotesque',sans-serif;box-sizing:border-box}
+.tape{background:var(--white);border:2px solid var(--ink);position:relative}
+.trow{display:grid;grid-template-columns:62px 92px minmax(0,1fr);gap:12px;padding:11px 22px;border-top:1.5px dashed rgba(31,37,71,0.3);align-items:baseline;font-size:15px}
+.dock{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:50;display:flex;gap:6px;align-items:center;padding:6px 6px 6px 14px;background:var(--ink);color:var(--paper);border-radius:6px;box-shadow:4px 4px 0 var(--org);font:500 12px 'IBM Plex Mono',monospace;max-width:calc(100% - 32px);flex-wrap:wrap;box-sizing:border-box}
+.mstate{height:28px;padding:0 10px;border-radius:4px;font:600 12px 'IBM Plex Mono',monospace;cursor:pointer;border:0}
+@media (max-width:860px){.wrap{padding:0 16px}.hide-sm{display:none !important}.h1{font-size:46px !important}.wire{grid-template-columns:1fr !important;gap:16px}.trow{grid-template-columns:52px minmax(0,1fr)}.trow .tg{display:none}.indent{margin-left:22px !important}}
+</style>
+</helmet>
+<div class="ns">
+<div class="grain"></div>
+
+<header class="z" style="border-bottom: 2px solid var(--ink); background: var(--paper); position: sticky; top: 0; z-index: 30">
+<div class="wrap" style="height: 66px; display: flex; align-items: center; gap: 18px">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none">
+<svg width="34" height="34" viewBox="0 0 300 300" aria-hidden="true"><defs><mask id="lgC"><rect width="300" height="300" fill="#fff"></rect><circle cx="190" cy="118" r="88" fill="#000"></circle></mask></defs><circle cx="158" cy="158" r="110" fill="#3D63DD" opacity=".45" mask="url(#lgC)"></circle><circle cx="150" cy="150" r="110" fill="#FFC93C" stroke="#1F2547" stroke-width="10" mask="url(#lgC)"></circle></svg>
+<span style="font-size: 26px; font-weight: 800; letter-spacing: -0.04em">nightshift</span></a>
+<nav aria-label="Main" style="display: flex; gap: 4px; flex: 1; overflow-x: auto; margin-left: 12px">
+<a class="nl on" href="Console.dc.html" aria-current="page">Console</a>
+<a class="nl" href="Directory.dc.html">Directory</a>
+<a class="nl" href="Dashboard.dc.html">Dashboard</a>
+<a class="nl" href="Launch.dc.html">Launch</a>
+</nav>
+<span class="chip hide-sm" style="height: 32px"><span class="k">payday in</span><span class="tnum" style="font-weight: 600">{{clock}}</span></span>
+<a class="btn btn-ink" href="Dashboard.dc.html" style="height: 40px; font-size: 14px; padding: 0 16px">Sign in</a>
+</div>
+</header>
+
+<main class="wrap z" style="padding-top: 48px; padding-bottom: 130px">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap">
+<div style="position: relative">
+<div class="kick">Buyer console</div>
+<h1 class="h1 riso" style="margin: 10px 0 0; font-size: 72px; line-height: 0.95; letter-spacing: -0.05em; font-weight: 800">Watch an agent <span style="color: var(--orgT)">hire a worker.</span></h1>
+<p style="margin: 14px 0 0; font-size: 18px; max-width: 600px">It finds a worker, checks it on ENS, pays it in USDC and gets the work back. Nobody touches anything after Run.</p>
+</div>
+<svg class="peek hide-sm" width="120" height="120" viewBox="0 0 300 300" aria-hidden="true">
+<defs><mask id="pkM"><rect width="300" height="300" fill="#fff"></rect><circle cx="190" cy="118" r="88" fill="#000"></circle></mask></defs>
+<circle cx="157" cy="157" r="110" fill="#3D63DD" opacity=".42" mask="url(#pkM)"></circle>
+<circle cx="150" cy="150" r="110" fill="#FFC93C" mask="url(#pkM)"></circle>
+<path d="M78 72 Q128 18 196 34 Q172 52 156 92 Q118 72 78 72 Z" fill="#FF6B3D" stroke="#1F2547" stroke-width="5"></path>
+<circle cx="202" cy="34" r="13" fill="#F4ECDA" stroke="#1F2547" stroke-width="5"></circle>
+<circle cx="80" cy="142" r="10" fill="#1F2547"></circle><circle cx="83" cy="138" r="3.5" fill="#F4ECDA"></circle>
+<circle cx="62" cy="168" r="10" fill="#FF6B3D" opacity=".55"></circle>
+<path d="M74 186 Q90 200 106 184" stroke="#1F2547" stroke-width="6" fill="none" stroke-linecap="round"></path>
+</svg>
+</div>
+
+<div class="card sh" style="margin-top: 28px; padding: 18px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
+<select class="select" aria-label="Skill" style="flex: 1 1 220px"><option>Transcribe · Tamil (transcribe:ta)</option></select>
+<span class="chip" style="height: 48px; padding: 0 14px; font-size: 13px; flex: 1 1 240px; border-width: 2px; border-radius: 6px">tamil-90s.mp3 <span class="k">1:30 · billed as 2 min</span></span>
+<sc-if value="{{canRun}}" hint-placeholder-val="{{ true }}">
+<button type="button" class="btn btn-ink" style="min-width: 200px" onClick="{{run}}">▶ {{runLabel}}</button>
+</sc-if>
+<sc-if value="{{isRunning}}">
+<button type="button" class="btn btn-ink" style="min-width: 200px" disabled="">
+<svg class="spin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"></path></svg>Running <span class="mono tnum">{{elapsed}}</span></button>
+</sc-if>
+<span class="mono" style="flex: 1 1 100%; font-size: 12px; color: var(--mu)">Spends real test USDC on Hedera testnet (about 0.06 per run) · one run at a time, 20 s apart</span>
+</div>
+
+<sc-if value="{{isError}}">
+<div class="enter card" role="alert" style="margin-top: 16px; padding: 14px 18px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; background: #F9DCD8">
+<span class="stamp" style="color: var(--red); transform: rotate(-4deg)">BUSY · 429</span>
+<span style="font-weight: 600">Another run is in progress.</span>
+<span style="color: var(--mu)">Try again in <span class="mono tnum">14 s</span>. Nothing was charged.</span>
+</div>
+</sc-if>
+
+<section aria-label="The wire" class="card sh" style="margin-top: 24px; padding: 26px; background: var(--white)">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px">
+<div class="kick" style="color: var(--ink)">The wire · who the buyer talks to</div>
+<div class="mono" style="font-size: 12px; color: var(--mu); display: flex; gap: 10px; align-items: center">
+<sc-if value="{{isRunning}}"><span style="color: var(--grnT); font-weight: 600">● streaming</span></sc-if>
+<sc-if value="{{hasEvents}}"><span>run-1793889578902</span></sc-if>
+</div>
+</div>
+<div class="wire" style="display: grid; grid-template-columns: 260px minmax(0, 1fr) 320px; align-items: center; min-height: 290px">
+<div class="card" style="padding: 18px; transform: rotate(-1deg)">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 36px; height: 36px; border-radius: 6px; border: 2px solid var(--ink); background: var(--yel); display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F2547" stroke-width="2.2" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></span>
+<div><div style="font-weight: 800; font-size: 17px">Podcast Assistant</div><div class="mono" style="font-size: 11px; color: var(--mu)">buyer agent</div></div>
+</div>
+<div class="kick" style="color: var(--mu); margin-top: 16px; font-size: 11px">wallet</div>
+<div class="mono tnum" style="font-size: 30px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1">{{balance}}<span style="font-size: 12px; color: var(--mu); margin-left: 6px">USDC</span></div>
+<a class="mono" href="https://hashscan.io/testnet/account/0.0.11129925" target="_blank" style="font-size: 11px; color: var(--blue)">0.0.11129925 ↗</a>
+<div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 12px" class="mono"><span style="color: var(--mu)">spent today</span><span class="tnum" style="color: var(--orgS); font-weight: 600">{{spent}} / 1.00</span></div>
+<div style="height: 8px; border: 1.5px solid var(--ink); border-radius: 3px; margin-top: 5px; overflow: hidden; background: var(--paper)"><div style="{{spentBar}}"></div></div>
+</div>
+
+<svg class="hide-sm" viewBox="0 0 400 290" preserveAspectRatio="none" width="100%" height="290" aria-hidden="true">
+<path d="M0 145 C 200 145, 200 48, 400 48" fill="none" stroke="{{w0.stroke}}" stroke-width="{{w0.width}}" class="{{w0.cls}}" stroke-dasharray="{{w0.dash}}" vector-effect="non-scaling-stroke"></path>
+<path d="M0 145 C 200 145, 200 145, 400 145" fill="none" stroke="{{w1.stroke}}" stroke-width="{{w1.width}}" class="{{w1.cls}}" stroke-dasharray="{{w1.dash}}" vector-effect="non-scaling-stroke"></path>
+<path d="M0 145 C 200 145, 200 242, 400 242" fill="none" stroke="{{w2.stroke}}" stroke-width="{{w2.width}}" class="{{w2.cls}}" stroke-dasharray="{{w2.dash}}" vector-effect="non-scaling-stroke"></path>
+</svg>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<sc-for list="{{workers}}" as="w" hint-placeholder-count="3">
+<a href="Agent.dc.html" style="{{w.box}}">
+<span style="{{w.moon}}"><span style="{{w.shade}}"></span></span>
+<span style="flex: 1; min-width: 0">
+<span style="display: flex; justify-content: space-between; gap: 8px"><span style="font-weight: 800; font-size: 15px">{{w.name}}</span><span class="mono tnum" style="font-size: 12px; color: var(--orgS); font-weight: 600">{{w.price}}</span></span>
+<span class="mono" style="{{w.statusStyle}}">{{w.status}}</span>
+</span>
+</a>
+</sc-for>
+</div>
+</div>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 28px; margin-top: 28px; align-items: flex-start">
+<section aria-label="Run tape" class="tape" style="flex: 999 1 620px; min-width: 0; box-shadow: 6px 6px 0 var(--blue)">
+<div style="padding: 18px 22px 12px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
+<div class="mono" style="font-weight: 600; letter-spacing: .14em; font-size: 13px">THE TAPE · LIVE FROM SSE</div>
+<span class="mono" style="font-size: 11px; color: var(--mu)">GET /buyer-console/run</span>
+</div>
+
+<sc-if value="{{isIdle}}">
+<div style="padding: 30px 22px 36px; text-align: center; border-top: 1.5px dashed rgba(31,37,71,0.3)">
+<svg width="120" height="110" viewBox="0 0 300 270" aria-hidden="true">
+<defs><mask id="slM"><rect width="300" height="300" fill="#fff"></rect><circle cx="190" cy="118" r="88" fill="#000"></circle></mask></defs>
+<circle cx="150" cy="150" r="110" fill="#FFC93C" stroke="#1F2547" stroke-width="5" mask="url(#slM)"></circle>
+<path d="M66 142 Q78 152 92 142" stroke="#1F2547" stroke-width="5" fill="none" stroke-linecap="round"></path>
+<text x="210" y="70" font-family="IBM Plex Mono" font-size="34" font-weight="600" fill="#3D63DD">z</text>
+<text x="240" y="36" font-family="IBM Plex Mono" font-size="24" font-weight="600" fill="#3D63DD">z</text>
+</svg>
+<div style="font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-top: 6px">Quiet night so far.</div>
+<div style="color: var(--mu); margin-top: 4px">Press Run. Each step prints here with its receipt.</div>
+</div>
+</sc-if>
+
+<sc-for list="{{shown}}" as="e" hint-placeholder-count="6">
+<div class="enter">
+<div class="trow">
+<span class="mono tnum" style="font-size: 12px; color: var(--mu)">{{e.t}}</span>
+<span class="mono tg" style="{{e.tagStyle}}">{{e.tag}}</span>
+<span style="min-width: 0"><b style="font-weight: 700">{{e.title}}</b> <span style="color: var(--mu)">{{e.sub}}</span></span>
+</div>
+
+<sc-if value="{{e.isDecide}}">
+<div class="indent" style="margin: -2px 22px 12px 188px; padding: 10px 14px; background: #E6EBFA; border-left: 4px solid var(--blue); font-size: 16px; font-style: italic">“{{e.rationale}}”<div class="mono" style="font-style: normal; font-size: 11px; color: var(--mu); margin-top: 4px">reasoned on 0G · qwen-flash</div></div>
+</sc-if>
+
+<sc-if value="{{e.isRefused}}">
+<div class="indent" style="margin: 0 22px 14px 188px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap">
+<span class="stamp stampin" style="color: var(--red); font-size: 15px; transform: rotate(-5deg)">REFUSED · 503</span>
+<span style="color: var(--mu)">kural&#39;s daily budget is used up. Refused <b style="color: var(--ink)">before</b> payment, so nothing was charged.</span>
+</div>
+</sc-if>
+
+<sc-if value="{{e.isPaid}}">
+<div class="indent" style="margin: 2px 22px 16px 188px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 16px; background: #FFE9DC; border: 2px solid var(--ink)">
+<div style="flex: 1 1 220px">
+<div class="mono tnum" style="font-size: 46px; font-weight: 600; letter-spacing: -0.04em; line-height: 1; color: var(--orgT)">0.060 <span style="font-size: 15px; color: var(--ink)">USDC</span></div>
+<div class="mono" style="font-size: 12px; margin-top: 8px">0.0.11129925 → 0.0.11323621 · price = ENS ✓</div>
+</div>
+<span class="stamp stampin" style="color: var(--orgS); font-size: 15px; transform: rotate(-5deg)">PAID</span>
+<a class="btn btn-org" href="https://hashscan.io/testnet/transaction/0.0.9185802-1793889582-937364275" target="_blank">View on HashScan ↗</a>
+</div>
+</sc-if>
+
+<sc-if value="{{e.isResult}}">
+<div class="indent" style="margin: 2px 22px 16px 188px; border: 2px solid var(--ink); background: var(--white)">
+<div class="mono" style="display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-bottom: 2px solid var(--ink); font-size: 11px; background: #DDEFD9"><span>TAMIL TRANSCRIPT · 946 CHARS</span><span>0G 87c3b7be…fc54f878 · HCS seq 12</span></div>
+<p class="ta" lang="ta" style="margin: 0; padding: 6px 14px 8px; font-size: 16px; line-height: 30px; background-image: repeating-linear-gradient(transparent 0 29px, rgba(61,99,221,0.18) 29px 30px)">{{transcript}}</p>
+<div style="padding: 0 12px 12px"><button type="button" class="btn" style="height: 32px; font-size: 13px; padding: 0 10px" onClick="{{toggleFull}}">{{fullLabel}}</button></div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+
+<sc-if value="{{isRunning}}">
+<div class="trow">
+<span class="mono tnum" style="font-size: 12px; color: var(--mu)">{{elapsed}}</span>
+<span class="mono tg" style="font-size: 12px; font-weight: 600; color: var(--orgS)">PAYING</span>
+<span style="display: inline-flex; gap: 8px; align-items: center"><svg class="spin" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D9481A" stroke-width="3" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.2-8.6"></path></svg><span>Signed 0.06 USDC to the ENS payTo · waiting for 0G Whisper, then settlement</span></span>
+</div>
+</sc-if>
+
+<sc-if value="{{isDone}}">
+<div class="enter" style="border-top: 2px solid var(--ink); padding: 16px 22px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; background: #DDEFD9">
+<span class="stamp stampin" style="color: var(--grnT); font-size: 15px; transform: rotate(-4deg)">SHIFT COMPLETE</span>
+<span class="mono" style="font-size: 12px">23.0 s · 3 found · 3 verified · 1 refused, not charged · paid once</span>
+</div>
+</sc-if>
+<div style="height: 12px; background: radial-gradient(circle at 7px 0, var(--paper) 6px, transparent 6.5px) 0 0/14px 12px repeat-x; margin-bottom: -12px; position: relative; top: 12px"></div>
+</section>
+
+<aside style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 24px">
+<div style="background: #FFF2B8; border: 2px solid var(--ink); padding: 26px 22px 18px; transform: rotate(1.2deg); position: relative; box-shadow: 4px 4px 0 var(--ink)">
+<span style="position: absolute; top: -12px; left: 50%; width: 90px; height: 22px; transform: translateX(-50%) rotate(-3deg); background: rgba(61,99,221,0.35); border: 1px solid rgba(31,37,71,0.3)"></span>
+<div style="font-size: 22px; font-weight: 800; letter-spacing: -0.02em">House rules</div>
+<div style="font-size: 13px; color: var(--mu)">The buyer signs nothing outside these.</div>
+<ol class="mono" style="margin: 14px 0 0; padding-left: 20px; font-size: 13px; line-height: 1.9">
+<li>max <b>0.10 USDC</b> per job</li>
+<li>max <b>1.00 USDC</b> a day</li>
+<li>ask a human above <b>0.50</b></li>
+<li>success rate at least <b>90%</b></li>
+<li>only names under <b>nightshift.eth</b></li>
+<li>USDC <b>0.0.429274</b> on hedera:testnet</li>
+<li>pay exactly the quote, to the ENS payTo</li>
+</ol>
+</div>
+</aside>
+</div>
+</main>
+
+<div class="dock">
+<span style="color: var(--yel); font-weight: 600; margin-right: 6px">MOCKUP</span>
+<sc-for list="{{mstates}}" as="s" hint-placeholder-count="4">
+<button type="button" class="mstate" style="{{s.style}}" onClick="{{s.pick}}">{{s.name}}</button>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2150}}'>
+class Component extends DCLogic {
+  componentDidMount() { this.timer = setInterval(() => this.setState({ now: Date.now() }), 1000); }
+  componentWillUnmount() { clearInterval(this.timer); this.clearRun(); }
+  clearRun() { (this.runTimers || []).forEach(clearTimeout); this.runTimers = []; }
+  setPhase(phase) {
+    this.clearRun();
+    this.setState({ phase, shown: phase === 'running' ? 10 : phase === 'done' ? 12 : 0, startedAt: Date.now() - (phase === 'running' ? 9000 : 0) });
+  }
+  startRun() {
+    this.clearRun();
+    this.setState({ phase: 'running', shown: 0, startedAt: Date.now() });
+    [400, 1100, 1500, 1800, 2100, 3000, 3500, 4300, 5300, 5900].forEach((t, i) => this.runTimers.push(setTimeout(() => this.setState({ shown: i + 1 }), t)));
+    this.runTimers.push(setTimeout(() => this.setState({ shown: 11 }), 9000));
+    this.runTimers.push(setTimeout(() => this.setState({ shown: 12, phase: 'done' }), 9800));
+  }
+  renderVals() {
+    const st = this.state || {};
+    const phase = st.phase || 'running';
+    const now = st.now || Date.now();
+    const d = new Date(now);
+    const left = Math.max(0, Math.floor((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - now) / 1000));
+    const p = (x) => String(x).padStart(2, '0');
+    const clock = p(Math.floor(left / 3600)) + ':' + p(Math.floor(left / 60) % 60) + ':' + p(left % 60);
+    const el = Math.max(0, (now - (st.startedAt || now - 9000)) / 1000);
+    const n = phase === 'done' ? 12 : phase === 'running' ? (st.shown === undefined ? 10 : st.shown) : 0;
+    const running = phase === 'running';
+    const tag = (c) => 'font-size:12px;font-weight:600;letter-spacing:.06em;color:' + c;
+    const N = '#575C7C', E = '#3D63DD', R = '#C42A3A', A = '#A8380C', G = '#177A4E';
+    const all = [
+      { t: '0.0s', tag: 'PLAN', tc: N, title: 'Transcribe tamil-90s.mp3 in Tamil,', sub: '2 billed minutes, within today’s 1.00 USDC' },
+      { t: '0.7s', tag: 'DISCOVER', tc: N, title: '3 Tamil workers in the directory:', sub: 'kural 0.02 · tamil-scribe 0.03 · chennai-ears 0.05' },
+      { t: '1.8s', tag: 'VERIFY', tc: E, title: 'kural.nightshift.eth ✓', sub: 'resolver 0xd4BE…204e is the registrar’s · payTo 0.0.11325237' },
+      { t: '2.1s', tag: 'VERIFY', tc: E, title: 'tamil-scribe.nightshift.eth ✓', sub: 'resolver 0xDfb0…8740 is the registrar’s · payTo 0.0.11323621' },
+      { t: '2.4s', tag: 'VERIFY', tc: E, title: 'chennai-ears.nightshift.eth ✓', sub: 'resolver 0xA86A…f998 is the registrar’s · payTo 0.0.11325243' },
+      { t: '3.2s', tag: 'DECIDE', tc: E, title: 'Picks kural,', sub: 'cheapest that passes the rules', isDecide: true, rationale: 'I chose kural.nightshift.eth for its lowest cost at 0.04 USDC with 100% success and no prior jobs, offering the most efficient value.' },
+      { t: '3.4s', tag: 'QUOTE', tc: N, title: 'kural asks 0.04 USDC', sub: '2 min × 0.02 · matches ENS ✓' },
+      { t: '4.7s', tag: 'REFUSED', tc: R, title: 'kural is over its daily budget', sub: '', isRefused: true },
+      { t: '5.8s', tag: 'DECIDE', tc: E, title: 'Picks tamil-scribe,', sub: 'next best · kural skipped', isDecide: true, rationale: 'I chose tamil-scribe.nightshift.eth because it’s cheaper at 0.06 USDC and delivers 100% success for just 2 jobs, offering better cost efficiency.' },
+      { t: '6.1s', tag: 'QUOTE', tc: N, title: 'tamil-scribe asks 0.06 USDC', sub: '2 min × 0.03 · matches ENS ✓' },
+      { t: '23.0s', tag: 'PAID', tc: A, title: 'Paid tamil-scribe on Hedera', sub: 'settled after the work succeeded', isPaid: true },
+      { t: '23.0s', tag: 'RESULT', tc: G, title: 'Transcript received', sub: '16.9 s end to end', isResult: true }
+    ].map((e) => Object.assign(e, { tagStyle: tag(e.tc) }));
+    const shown = all.slice(0, n);
+    const S = {
+      none: ['rgba(31,37,71,0.15)', 1.5, '', '3 5', 'opacity:0.45', 'waiting', '#575C7C'],
+      found: ['#575C7C', 1.5, '', '3 5', '', 'found in directory', '#575C7C'],
+      verified: ['#3D63DD', 2, '', '', 'background:#E6EBFA', 'verified on ENS ✓', '#3D63DD'],
+      chosen: ['#3D63DD', 3, 'flow', '', 'background:#E6EBFA;transform:translateX(-6px)', 'chosen · asking for a quote', '#3D63DD'],
+      refused: ['#C42A3A', 3, '', '', 'background:#F9DCD8', '503 over budget · not charged', '#C42A3A'],
+      paying: ['#FF6B3D', 4, 'flow', '', 'background:#FFE2CF;transform:translateX(-6px)', 'paying 0.06 USDC…', '#A8380C'],
+      paid: ['#FF6B3D', 4, '', '', 'background:#FFE2CF', 'paid 0.06 USDC', '#A8380C'],
+      done: ['#2FA36B', 4, '', '', 'background:#DDEFD9', 'paid · transcript returned ✓', '#177A4E'],
+      idle: ['rgba(61,99,221,0.35)', 1.5, '', '', '', 'verified · not needed tonight', '#575C7C']
+    };
+    const kural = n >= 8 ? 'refused' : n >= 6 ? 'chosen' : n >= 3 ? 'verified' : n >= 2 ? 'found' : 'none';
+    const tamil = n >= 12 ? 'done' : n >= 11 ? 'paid' : (n >= 10 && running) ? 'paying' : n >= 9 ? 'chosen' : n >= 4 ? 'verified' : n >= 2 ? 'found' : 'none';
+    const chennai = n >= 9 ? 'idle' : n >= 5 ? 'verified' : n >= 2 ? 'found' : 'none';
+    const line = (k) => ({ stroke: S[k][0], width: S[k][1], cls: S[k][2], dash: S[k][3] || 'none' });
+    const node = (name, price, k, lit) => ({
+      name, price,
+      box: 'display:flex;gap:12px;align-items:center;padding:12px 14px;border:2px solid #1F2547;border-radius:6px;background:#FBF6EA;text-decoration:none;color:#1F2547;transition:all .25s;box-shadow:3px 3px 0 #1F2547;' + S[k][4],
+      moon: 'position:relative;display:inline-block;width:34px;height:34px;border-radius:50%;border:2px solid #1F2547;background:#FFC93C;overflow:hidden;flex:none',
+      shade: 'position:absolute;inset:0;border-radius:50%;background:#2B3160;transform:translateX(' + Math.round(lit * 100) + '%)',
+      statusStyle: 'display:block;font-size:12px;margin-top:2px;color:' + S[k][6],
+      status: S[k][5]
+    });
+    const names = [['idle', 'Idle'], ['running', 'Mid-run'], ['done', 'Finished'], ['error', 'Error']];
+    const mstates = names.map(([id, name]) => ({
+      name,
+      style: id === phase ? 'background:#FFC93C;color:#1F2547' : 'background:transparent;color:#F4ECDA',
+      pick: () => id === 'error' ? (this.clearRun(), this.setState({ phase: 'error', shown: 0 })) : this.setPhase(id)
+    }));
+    const full = 'வணக்கம் நண்பர்களே! இன்று நாம் செயர்க்கை நுண்ணரிவு மத்தும் தொழில் நுட்ப வளர்ச்சியைப் பற்றி பார்க்கப் போகிறோம். தர்ப்போதைய உலகில் தொழில் நுட்பம் நமது அன்றாட வாழ்க்கையின் ஒரு முக்கிய பகுதியாக மாறிவிட்டது. காணையில் எழுந்தவுடன் மொபைல் போனை பயன்படுத்துவது முதல் இரவில் தூங்குவதற்கு முன்பு எனயத்தை பயன்படுத்துவது வரை தொழில் நுட்பம் நம்முடன் பயனிக்கிறது. குறிப்பாக செயர்க்கை நுண்ணரிவு எனப்படும் artificial intelligence பல்வேறு துறைகளில் பெரிய மாற்றங்களை ஏற்படுத்தி வருகிறது. கல்வி துறையில் மாணவர்கள் புதிய விஷயங்களை கட்டுக்கொள்ளவும், மருத்துவ துறையில் நோய்களை கண்டறியவும், உவசாயத் துறையில் பைர்களின் வளர்ச்சியை மேம்படுத்தவும் செயர்க்கை நுன்னரிவு உதவிகிறது. அதே நேரத்தில் தொழில் 30 பொறுப்புளன் பயன்படுத்துவதும் மிகவும் அவசியம். இணையத்தில் கிடைக்கும் அனைத்து தகவல்களும் உண்மையானவை என்று நம்பி விடக்கூடாது. நமது தனிப்பட்ட தகவல்கள் தொழில் நுட்பத்தையும் சரியான முறையில் பயன்படுத்தி, நமக்கும் நமது சமூகத்திற்கும் பயனுள்ள மாற்றங்களை உருவாக்குவோம் நன்றி வணக்கம்';
+    const short = full.split('. ').slice(0, 2).join('. ') + '.';
+    const paidYet = n >= 11;
+    return {
+      clock, mstates, shown,
+      w0: line(kural), w1: line(tamil), w2: line(chennai),
+      workers: [node('kural', '0.02/min', kural, 0), node('tamil-scribe', '0.03/min', tamil, 0.88), node('chennai-ears', '0.05/min', chennai, 0.88)],
+      isIdle: phase === 'idle' || phase === 'error',
+      isError: phase === 'error',
+      isRunning: running,
+      isDone: phase === 'done',
+      canRun: !running,
+      hasEvents: n > 0,
+      runLabel: phase === 'done' ? 'Run again' : 'Run buyer agent',
+      run: () => this.startRun(),
+      elapsed: el.toFixed(0) + 's',
+      transcript: st.full ? full : short,
+      fullLabel: st.full ? 'Show less' : 'Show full transcript',
+      toggleFull: () => this.setState({ full: !st.full }),
+      balance: paidYet ? '19.19' : '19.25',
+      spent: paidYet ? '0.80' : '0.74',
+      spentBar: 'height:100%;background:#FF6B3D;width:' + (paidYet ? '80' : '74') + '%'
+    };
+  }
+}
+</script>
+</body>
+</html>
