@@ -1,8 +1,8 @@
-// Spending rules manager and persistent state tracker (docs/05-buyer-agent.md).
+// Spending rules (rules.json) and the daily spend tracker (.state.json, reset per UTC date).
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { BuyerRules, BuyerSpendingState } from "@nightshift/shared";
+import { formatUsdc, type BuyerRules, type BuyerSpendingState } from "@nightshift/shared";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -83,7 +83,7 @@ export function validateSpend(amountAtomic: bigint, rules?: BuyerRules): SpendVa
   if (amountAtomic > maxPerJob) {
     return {
       allowed: false,
-      reason: `amount ${amountAtomic} exceeds max per job ${maxPerJob} ($${(Number(maxPerJob) / 1e6).toFixed(2)})`,
+      reason: `amount ${amountAtomic} exceeds max per job ${maxPerJob} (${formatUsdc(maxPerJob)} USDC)`,
       maxPerJob,
       dailyBudget,
       dailySpent,
@@ -94,7 +94,7 @@ export function validateSpend(amountAtomic: bigint, rules?: BuyerRules): SpendVa
   if (amountAtomic > remainingDaily) {
     return {
       allowed: false,
-      reason: `amount ${amountAtomic} exceeds remaining daily budget ${remainingDaily} ($${(Number(remainingDaily) / 1e6).toFixed(2)})`,
+      reason: `amount ${amountAtomic} exceeds remaining daily budget ${remainingDaily} (${formatUsdc(remainingDaily)} USDC)`,
       maxPerJob,
       dailyBudget,
       dailySpent,
@@ -111,7 +111,7 @@ export function validateSpend(amountAtomic: bigint, rules?: BuyerRules): SpendVa
   };
 }
 
-/** Record a completed payment in .state.json atomically. */
+/** Record a settled payment in .state.json. */
 export function recordSpend(amountAtomic: bigint): BuyerSpendingState {
   const state = loadState();
   const daily = BigInt(state.dailySpentAtomic) + amountAtomic;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateSpend, type SpendValidation } from "./spending.js";
+import { validateSpend } from "./spending.js";
 
 describe("buyer spending validation", () => {
   const rules = {

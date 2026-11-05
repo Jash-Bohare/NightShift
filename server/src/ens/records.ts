@@ -1,14 +1,9 @@
 // Initial ENS records for a new agent (docs/04 § ENS operations). Pure; unit-tested.
-import { HEDERA_NETWORK, type OwnerKey } from "@nightshift/shared";
+import { formatUsdc, HEDERA_NETWORK, type OwnerKey } from "@nightshift/shared";
+
+export { formatUsdc };
 
 const LANGUAGES: Record<string, string> = { ta: "Tamil", hi: "Hindi", en: "English" };
-
-/** 30000 -> "0.03" (USDC, 6 dp) without floats. */
-export function formatUsdc(atomic: bigint): string {
-  const whole = atomic / 1_000_000n;
-  const frac = (atomic % 1_000_000n).toString().padStart(6, "0").replace(/0+$/, "");
-  return frac ? `${whole}.${frac}` : whole.toString();
-}
 
 /** "tamil-scribe" -> "Tamil Scribe" */
 export function titleFromLabel(label: string): string {

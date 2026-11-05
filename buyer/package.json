@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "tsx src/cli.ts",
     "typecheck": "tsc -p .",
     "test": "vitest run"
   },
@@ -22,9 +22,6 @@
     "vitest": "^5.1.0"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./agent": "./src/agent.ts",
-    "./spending": "./src/spending.ts",
-    "./rules": "./src/rules.ts"
+    ".": "./src/index.ts"
   }
 }

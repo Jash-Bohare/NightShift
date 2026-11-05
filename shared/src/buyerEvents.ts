@@ -1,4 +1,12 @@
-// Buyer events and spending rule definitions (docs/05-buyer-agent.md).
+// Buyer events and spending rule definitions shared by buyer/, server/ and web/.
+
+/** `nightshift.reputation` text record, written only by the registrar. `success` is a rate in [0, 1]. */
+export interface AgentReputation {
+  jobs: number;
+  success: number;
+  p50_ms: number;
+  updated?: string;
+}
 
 export interface BuyerRules {
   maxPerJobAtomic: string; // e.g. "100000" ($0.10)
@@ -35,7 +43,7 @@ export interface BuyerPlanEvent {
   task: {
     skill: string;
     file?: string;
-    description?: string;
+    units: number;
   };
   rules: BuyerRules;
   timestamp: string;
@@ -48,7 +56,7 @@ export interface BuyerDiscoverEvent {
     ensName: string;
     skill: string;
     priceAtomic: string;
-    reputation: any;
+    reputation: AgentReputation | null;
   }>;
   timestamp: string;
 }
