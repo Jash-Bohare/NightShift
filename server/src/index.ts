@@ -29,7 +29,8 @@ app.post("/a/:label/run", runPrecheck); // 404 / 409 / 422 / 503 before any 402
 app.use(paymentMiddleware(routes, resourceServer));
 app.post("/a/:label/run", runHandler);
 
-const onError: ErrorRequestHandler = (err, _req, res, _next) => {
+const onError: ErrorRequestHandler = (err, _req, res, next) => {
+  if (res.headersSent) return next(err);
   if (err instanceof ApiError) {
     res.status(err.status).json(err.toJSON());
     return;
@@ -39,24 +40,22 @@ const onError: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 app.use(onError);
 
-app.listen(env.PORT, () =>
-  log("server", `listening on :${env.PORT}`, { facilitator: env.X402_FACILITATOR_URL }),
-);
+// Express 5 passes listen errors (e.g. EADDRINUSE) to this callback: fail loudly, start nothing.
+app.listen(env.PORT, (err?: Error) => {
+  if (err) {
+    logError("server", `cannot listen on :${env.PORT}`, err);
+    process.exit(1);
+  }
+  log("server", `listening on :${env.PORT}`, { facilitator: env.X402_FACILITATOR_URL });
+  startCrons();
+});
 
-// Crons (UTC). Reputation: batch Sepolia writes every 10 min (docs/04 § Crons).
-cron.schedule(
-  "*/10 * * * *",
-  () => void runReputationBatch().catch((e: unknown) => logError("cron", "reputation", e)),
-  {
-    timezone: "UTC",
-  },
-);
-
-// Indexer: sync new registrations & ENS updates every 30 s
-cron.schedule(
-  "*/30 * * * * *",
-  () => void runIndexerCron().catch((e: unknown) => logError("cron", "indexer", e)),
-  {
-    timezone: "UTC",
-  },
-);
+// Crons (UTC, docs/04 § Crons): indexer every 30 s, reputation batch every 10 min.
+function startCrons(): void {
+  cron.schedule("*/30 * * * * *", () => void runIndexerCron(), { timezone: "UTC" });
+  cron.schedule(
+    "*/10 * * * *",
+    () => void runReputationBatch().catch((e: unknown) => logError("cron", "reputation", e)),
+    { timezone: "UTC" },
+  );
+}

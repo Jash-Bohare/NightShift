@@ -174,13 +174,11 @@ export const runHandler: RequestHandler = async (req, res) => {
       latency_ms: Math.round(performance.now() - t0),
     }).catch((e: unknown) => logError("db", `job ${jobId} failure update`, e));
     if (upstream)
-      res
-        .status(502)
-        .json({
-          error: "zg_unavailable",
-          message: "0G inference failed; you were not charged",
-          job_id: jobId,
-        });
+      res.status(502).json({
+        error: "zg_unavailable",
+        message: "0G inference failed; you were not charged",
+        job_id: jobId,
+      });
     else
       res
         .status(500)
