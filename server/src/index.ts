@@ -2,7 +2,9 @@
 import cors from "cors";
 import express, { type ErrorRequestHandler } from "express";
 import { paymentMiddleware } from "@x402/express";
+import cron from "node-cron";
 import { env } from "./config.js";
+import { runReputationBatch } from "./cron/reputation.js";
 import { ApiError } from "./errors.js";
 import { log, logError } from "./log.js";
 import { publicRouter } from "./routes/public.js";
@@ -36,3 +38,11 @@ app.listen(env.PORT, () =>
   log("server", `listening on :${env.PORT}`, { facilitator: env.X402_FACILITATOR_URL }),
 );
 
+// Crons (UTC). Reputation: batch Sepolia writes every 10 min (docs/04 § Crons).
+cron.schedule(
+  "*/10 * * * *",
+  () => void runReputationBatch().catch((e: unknown) => logError("cron", "reputation", e)),
+  {
+    timezone: "UTC",
+  },
+);
