@@ -1,0 +1,13 @@
+{
+  "name": "@nightshift/buyer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@nightshift/shared": "workspace:*"
+  }
+}

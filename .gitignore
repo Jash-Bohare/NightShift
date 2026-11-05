@@ -1,0 +1,30 @@
+# secrets
+.env*
+!.env.example
+
+# deps / build
+node_modules
+dist
+.next
+next-env.d.ts
+out
+cache
+*.tsbuildinfo
+
+# foundry
+contracts/broadcast/*/31337/
+
+# local state
+.supabase
+supabase/.temp
+supabase/.branches
+*.Zone.Identifier
+*:Zone.Identifier
+.DS_Store
+contracts/broadcast/**/dry-run/
+contracts/broadcast/**/run-[0-9]*.json
+
+# private planning docs (kept local, never pushed)
+docs/
+CLAUDE.md
+HOW_TO_USE.md

@@ -1,0 +1,12 @@
+node_modules
+pnpm-lock.yaml
+.next
+dist
+contracts/lib
+contracts/out
+contracts/cache
+docs
+*.md
+contracts/broadcast
+contracts/deployments
+shared/abi

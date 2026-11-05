@@ -1,0 +1,16 @@
+packages:
+  - contracts
+  - server
+  - web
+  - buyer
+  - shared
+  - scripts
+
+# @x402/hedera@2.28.0 pins the Hedera SDK to exactly 2.85.0. A second copy
+# causes `t.startsWith is not a function` (see docs/07).
+overrides:
+  "@hiero-ledger/sdk": 2.85.0
+
+onlyBuiltDependencies:
+  - esbuild
+  - supabase
