@@ -4,9 +4,11 @@ import express, { type ErrorRequestHandler } from "express";
 import { paymentMiddleware } from "@x402/express";
 import cron from "node-cron";
 import { env } from "./config.js";
+import { runIndexerCron } from "./cron/indexer.js";
 import { runReputationBatch } from "./cron/reputation.js";
 import { ApiError } from "./errors.js";
 import { log, logError } from "./log.js";
+import { directoryRouter } from "./routes/directory.js";
 import { publicRouter } from "./routes/public.js";
 import { runHandler, runPrecheck } from "./routes/run.js";
 import { JOB_HEADER, resourceServer, routes } from "./x402/server.js";
@@ -20,6 +22,7 @@ app.use(
   }),
 );
 app.use(publicRouter);
+app.use(directoryRouter);
 app.post("/a/:label/run", runPrecheck); // 404 / 409 / 422 / 503 before any 402
 app.use(paymentMiddleware(routes, resourceServer));
 app.post("/a/:label/run", runHandler);
@@ -42,6 +45,15 @@ app.listen(env.PORT, () =>
 cron.schedule(
   "*/10 * * * *",
   () => void runReputationBatch().catch((e: unknown) => logError("cron", "reputation", e)),
+  {
+    timezone: "UTC",
+  },
+);
+
+// Indexer: sync new registrations & ENS updates every 30 s
+cron.schedule(
+  "*/30 * * * * *",
+  () => void runIndexerCron().catch((e: unknown) => logError("cron", "indexer", e)),
   {
     timezone: "UTC",
   },

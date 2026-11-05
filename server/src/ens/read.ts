@@ -18,15 +18,16 @@ export async function readAgentRecords(name: string): Promise<EnsRecords> {
   try {
     const n = normalize(name);
     const keys = [...OWNER_KEYS, REPUTATION_KEY];
-    const [resolver, ...values] = await Promise.all([
-      sepoliaClient.getEnsResolver({ name: n }).catch(() => null),
-      ...keys.map((key) => sepoliaClient.getEnsText({ name: n, key })),
-    ]);
+    const resolver = await sepoliaClient.getEnsResolver({ name: n }).catch(() => null);
     const texts: Record<string, string> = {};
-    keys.forEach((k, i) => {
-      const v = values[i];
-      if (v) texts[k] = v;
-    });
+    for (const key of keys) {
+      try {
+        const v = await sepoliaClient.getEnsText({ name: n, key });
+        if (v) texts[key] = v;
+      } catch {
+        // Individual key not set or read failed
+      }
+    }
     const recs = { name: n, resolver: resolver ?? null, texts };
     cache.set(name, { at: performance.now(), recs });
     return recs;
