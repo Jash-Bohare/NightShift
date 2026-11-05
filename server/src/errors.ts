@@ -11,6 +11,7 @@ export type ApiErrorCode =
   | "units_mismatch"
   | "agent_paused"
   | "zg_unavailable"
+  | "rate_limited"
   | "internal";
 
 export class ApiError extends Error {

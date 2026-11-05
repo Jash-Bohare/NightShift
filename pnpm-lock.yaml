@@ -38,9 +38,34 @@ importers:
 
   buyer:
     dependencies:
+      '@hiero-ledger/sdk':
+        specifier: 2.85.0
+        version: 2.85.0(bn.js@5.2.3)(bufferutil@4.1.0)(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.1)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)
       '@nightshift/shared':
         specifier: workspace:*
         version: link:../shared
+      '@x402/core':
+        specifier: 2.28.0
+        version: 2.28.0
+      '@x402/fetch':
+        specifier: 2.28.0
+        version: 2.28.0
+      '@x402/hedera':
+        specifier: 2.28.0
+        version: 2.28.0(ansi-regex@6.2.2)(ansi-styles@6.2.3)(bn.js@5.2.3)(bufferutil@4.1.0)(debug@4.4.1)(protobufjs@8.0.1)(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.1)(utf-8-validate@5.0.10))(strip-ansi@7.1.2)(utf-8-validate@5.0.10)
+      music-metadata:
+        specifier: ^12.3.4
+        version: 12.3.4
+      viem:
+        specifier: ^2.57.10
+        version: 2.57.10(bufferutil@4.1.0)(typescript@6.0.3)(utf-8-validate@5.0.10)(zod@4.6.7)
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      vitest:
+        specifier: ^5.1.0
+        version: 5.1.0(@types/node@20.19.43)(vite@8.3.6(@types/node@20.19.43)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.15))
 
   contracts: {}
 
@@ -86,6 +111,9 @@ importers:
       '@hiero-ledger/sdk':
         specifier: 2.85.0
         version: 2.85.0(bn.js@5.2.3)(bufferutil@4.1.0)(react-native@0.88.0(@babel/core@7.29.7)(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.3.1)(utf-8-validate@5.0.10))(utf-8-validate@5.0.10)
+      '@nightshift/buyer':
+        specifier: workspace:*
+        version: link:../buyer
       '@nightshift/shared':
         specifier: workspace:*
         version: link:../shared
@@ -7408,7 +7436,7 @@ snapshots:
       '@solana/functional': 5.5.1(typescript@6.0.3)
       '@solana/rpc-subscriptions-spec': 5.5.1(typescript@6.0.3)
       '@solana/subscribable': 5.5.1(typescript@6.0.3)
-      ws: 8.21.0(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      ws: 8.22.1(bufferutil@4.1.0)(utf-8-validate@5.0.10)
     optionalDependencies:
       typescript: 6.0.3
     transitivePeerDependencies:

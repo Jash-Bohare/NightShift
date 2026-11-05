@@ -46,9 +46,9 @@ describe("directory filtering logic", () => {
 
   it("sorts by price ascending", () => {
     const sorted = [...sampleAgents].sort((a, b) => Number(a.price_atomic - b.price_atomic));
-    expect(sorted[0].label).toBe("kural");
-    expect(sorted[1].label).toBe("tamil-scribe");
-    expect(sorted[2].label).toBe("chennai-ears");
+    expect(sorted[0]?.label).toBe("kural");
+    expect(sorted[1]?.label).toBe("tamil-scribe");
+    expect(sorted[2]?.label).toBe("chennai-ears");
   });
 
   it("sorts by reputation (success count and success rate)", () => {
@@ -58,9 +58,9 @@ describe("directory filtering logic", () => {
       if (rateB !== rateA) return rateB - rateA;
       return b.reputation.jobs - a.reputation.jobs;
     });
-    expect(sorted[0].label).toBe("tamil-scribe"); // 100% (10/10)
-    expect(sorted[1].label).toBe("chennai-ears"); // 95% (19/20)
-    expect(sorted[2].label).toBe("kural"); // 80% (4/5)
+    expect(sorted[0]?.label).toBe("tamil-scribe"); // 100% (10/10)
+    expect(sorted[1]?.label).toBe("chennai-ears"); // 95% (19/20)
+    expect(sorted[2]?.label).toBe("kural"); // 80% (4/5)
   });
 
   it("searches by keyword", () => {
@@ -72,6 +72,6 @@ describe("directory filtering logic", () => {
         a.description.toLowerCase().includes(search),
     );
     expect(found.length).toBe(1);
-    expect(found[0].label).toBe("kural");
+    expect(found[0]?.label).toBe("kural");
   });
 });

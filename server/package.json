@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@hiero-ledger/sdk": "2.85.0",
+    "@nightshift/buyer": "workspace:*",
     "@nightshift/shared": "workspace:*",
     "@supabase/supabase-js": "^2.119.0",
     "@x402/core": "2.28.0",

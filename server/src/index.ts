@@ -8,6 +8,7 @@ import { runIndexerCron } from "./cron/indexer.js";
 import { runReputationBatch } from "./cron/reputation.js";
 import { ApiError } from "./errors.js";
 import { log, logError } from "./log.js";
+import { buyerConsoleRouter } from "./routes/buyerConsole.js";
 import { directoryRouter } from "./routes/directory.js";
 import { publicRouter } from "./routes/public.js";
 import { runHandler, runPrecheck } from "./routes/run.js";
@@ -23,6 +24,7 @@ app.use(
 );
 app.use(publicRouter);
 app.use(directoryRouter);
+app.use(buyerConsoleRouter);
 app.post("/a/:label/run", runPrecheck); // 404 / 409 / 422 / 503 before any 402
 app.use(paymentMiddleware(routes, resourceServer));
 app.post("/a/:label/run", runHandler);

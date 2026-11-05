@@ -22,6 +22,7 @@
     "vitest": "^5.1.0"
   },
   "exports": {
+    ".": "./src/index.ts",
     "./agent": "./src/agent.ts",
     "./spending": "./src/spending.ts",
     "./rules": "./src/rules.ts"

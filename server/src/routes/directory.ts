@@ -36,7 +36,7 @@ function normalizeSkillFilter(skill?: string, capability?: string, task?: string
 directoryRouter.get("/directory", async (req, res) => {
   const parsed = DirectoryQuery.safeParse(req.query);
   if (!parsed.success) {
-    throw new ApiError(422, "invalid_query", "Invalid directory query parameters", parsed.error.issues);
+    throw new ApiError(422, "invalid_input", "Invalid directory query parameters", parsed.error.issues);
   }
 
   const { maxPrice, search, status, sort, page, limit } = parsed.data;
