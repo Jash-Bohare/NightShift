@@ -44,6 +44,8 @@ const EnvSchema = z.object({
   X402_FACILITATOR_URL: z.url(),
 
   SEPOLIA_RPC_URL: z.url(),
+  // eth_getLogs over wide block ranges (Alchemy free tier caps the range); defaults to SEPOLIA_RPC_URL.
+  SEPOLIA_LOGS_RPC_URL: z.url().optional(),
   ENS_OPERATOR_PRIVATE_KEY: hex32Key,
 
   SUPABASE_URL: z.url(),

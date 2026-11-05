@@ -1,6 +1,6 @@
-// Indexer cron (runs every 30 s): syncs new registrations & record changes from Sepolia to directory.
+// Indexer cron (every 30 s). Overlapping runs are skipped.
 import { runIndexer } from "../ens/indexer.js";
-import { log, logError } from "../log.js";
+import { logError } from "../log.js";
 
 let running = false;
 
@@ -8,15 +8,9 @@ export async function runIndexerCron(): Promise<void> {
   if (running) return;
   running = true;
   try {
-    const res = await runIndexer();
-    if (res.indexed > 0) {
-      log("cron", `indexer synced ${res.indexed} agent(s)`, {
-        labels: res.labels,
-        lastBlock: res.toBlock.toString(),
-      });
-    }
+    await runIndexer();
   } catch (err) {
-    logError("cron", "indexer error", err);
+    logError("cron", "indexer run failed", err);
   } finally {
     running = false;
   }

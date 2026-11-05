@@ -25,6 +25,10 @@ export async function setAgentStatus(agent: AgentRow, status: AgentStatus): Prom
     await db.from("agents").update({ status }).eq("id", agent.id).select("id"),
   );
   agentCache.delete(agent.label);
+  // Keep the directory cache's status in step (the indexer also copies it on every sync).
+  const dir = await db.from("directory").update({ status }).eq("label", agent.label);
+  if (dir.error)
+    throw new UpstreamError("db", `directory status ${agent.label}: ${dir.error.message}`);
 }
 
 export async function agentZgKey(agentId: string): Promise<string> {

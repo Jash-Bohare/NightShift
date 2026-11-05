@@ -1,137 +1,102 @@
-// P3.4: Seed 3 real agents for discovery and comparison (docs/05-buyer-agent.md § Demo data):
-// 1. tamil-scribe: 0.03 USDC/min, cap $0.50/day (primary worker)
-// 2. kural: 0.02 USDC/min, tiny cap (1 micro-USD) -> triggers 503 over_budget refusal
-// 3. chennai-ears: 0.05 USDC/min, cap $0.50/day (higher price alternative)
-//
+// P3.4: seed the 3 demo agents the buyer compares (docs/05 § Demo data). Idempotent:
+//   - a free label is launched for real (Sepolia name + resolver, Hedera account, encrypted keys);
+//   - an existing agent gets its daily cap reset to the spec (so test edits never linger);
+//   - finally every agent is (re)indexed into the directory from ENS.
+//   tamil-scribe  0.03 USDC/min, cap $0.50/day   the expected winner
+//   kural         0.02 USDC/min, cap 1 micro-USD cheapest, but its budget guard always refuses (503)
+//   chennai-ears  0.05 USDC/min, cap $0.50/day   premium fallback
 // Run: pnpm -C scripts exec tsx seed-agents.ts [--dry-run]
-
 import { parseArgs } from "node:util";
-import { ENS_PARENT_NAME } from "@nightshift/shared";
-import { isAddress } from "viem";
+import { ENS_PARENT_NAME, type SkillId } from "@nightshift/shared";
 
-const { values: args } = parseArgs({
-  options: {
-    "dry-run": { type: "boolean", default: false },
-  },
-});
+const { values: args } = parseArgs({ options: { "dry-run": { type: "boolean", default: false } } });
+const dryRun = args["dry-run"] ?? false;
 
-// Import server modules (loads .env)
-const { env, deployment } = await import("@nightshift/server/config");
+// Importing the server loads and validates the repo .env.
+const { env } = await import("@nightshift/server/config");
 const { db } = await import("@nightshift/server/db/client");
 const { launchAgent } = await import("@nightshift/server/launch");
-const { available, sepoliaClient } = await import("@nightshift/server/ens");
-const { runIndexer, syncAgentToDirectory } = await import("@nightshift/server/ens/indexer");
+const { available } = await import("@nightshift/server/ens");
+const { syncAgentToDirectory } = await import("@nightshift/server/ens/indexer");
 
-const OWNER_PRIVY = "did:privy:cmvjrmi8302yr0gjn5m2uvvh2";
-const OWNER_EVM = "0x0ABE807747De2ed487e4c56a945B8F5215530ed8";
+// Seed data, not product data: the demo owner is Jash's Privy user and embedded wallet.
+const OWNER = {
+  privyUserId: "did:privy:cmvjrmi8302yr0gjn5m2uvvh2",
+  evmAddress: "0x0ABE807747De2ed487e4c56a945B8F5215530ed8",
+} as const;
 
 interface SeedSpec {
   label: string;
-  skill: "transcribe:ta";
+  skill: SkillId;
   priceAtomic: bigint;
   dailyCapUsdMicro: bigint;
-  description: string;
 }
 
-const SEED_AGENTS: SeedSpec[] = [
+const SEEDS: SeedSpec[] = [
   {
     label: "tamil-scribe",
     skill: "transcribe:ta",
-    priceAtomic: 30000n, // 0.03 USDC/min
-    dailyCapUsdMicro: 500000n, // $0.50/day
-    description: "Transcribes Tamil audio to text. Runs whisper-large-v3 on 0G Compute.",
+    priceAtomic: 30_000n,
+    dailyCapUsdMicro: 500_000n,
   },
-  {
-    label: "kural",
-    skill: "transcribe:ta",
-    priceAtomic: 20000n, // 0.02 USDC/min (cheaper!)
-    dailyCapUsdMicro: 1n, // 1 micro-USD -> triggers 503 over_budget
-    description: "Fast Tamil audio scribe with low rate. Runs whisper-large-v3 on 0G.",
-  },
+  { label: "kural", skill: "transcribe:ta", priceAtomic: 20_000n, dailyCapUsdMicro: 1n },
   {
     label: "chennai-ears",
     skill: "transcribe:ta",
-    priceAtomic: 50000n, // 0.05 USDC/min (premium)
-    dailyCapUsdMicro: 500000n, // $0.50/day
-    description: "High accuracy Tamil transcription agent on 0G Compute.",
+    priceAtomic: 50_000n,
+    dailyCapUsdMicro: 500_000n,
   },
 ];
 
-async function main() {
-  console.log("🌱 Nightshift Agent Seeder (Phase 3.4)");
+for (const s of SEEDS) {
+  const name = `${s.label}.${ENS_PARENT_NAME}`;
+  const row = await db
+    .from("agents")
+    .select("id,status,daily_cap_usd_micro")
+    .eq("label", s.label)
+    .maybeSingle();
+  if (row.error) throw new Error(`[db] ${row.error.message}`);
 
-  for (const spec of SEED_AGENTS) {
-    const ensName = `${spec.label}.${ENS_PARENT_NAME}`;
-    console.log(`\n--- Agent: ${spec.label} (${ensName}) ---`);
-
-    // Check if agent row already exists
-    const existing = await db
-      .from("agents")
-      .select("id,label,status,hedera_account_id,resolver_address")
-      .eq("label", spec.label)
-      .maybeSingle();
-
-    if (existing.data && existing.data.status === "active") {
-      console.log(`  Agent row exists and active (id ${existing.data.id}, Hedera ${existing.data.hedera_account_id})`);
-      // Update daily_cap if spec requires (e.g. kural cap = 1)
-      if (spec.label === "kural") {
-        await db.from("agents").update({ daily_cap_usd_micro: spec.dailyCapUsdMicro.toString() }).eq("label", spec.label);
+  if (row.data) {
+    const cap = String(row.data.daily_cap_usd_micro);
+    console.log(`[seed] ${name}: exists (${row.data.status}), cap ${cap}`);
+    if (cap !== s.dailyCapUsdMicro.toString()) {
+      console.log(`[seed]   cap ${cap} -> ${s.dailyCapUsdMicro}${dryRun ? " (dry run)" : ""}`);
+      if (!dryRun) {
+        const up = await db
+          .from("agents")
+          .update({ daily_cap_usd_micro: s.dailyCapUsdMicro.toString() })
+          .eq("id", row.data.id);
+        if (up.error) throw new Error(`[db] ${up.error.message}`);
       }
-      await syncAgentToDirectory(spec.label);
-      continue;
     }
-
-    const isAvail = await available(spec.label);
-    console.log(`  On-chain availability on Sepolia: ${isAvail}`);
-
-    if (args["dry-run"]) {
-      console.log(`  [dry-run] Would launch ${spec.label}: price=${spec.priceAtomic}, cap=${spec.dailyCapUsdMicro}`);
-      continue;
-    }
-
-    if (isAvail) {
-      console.log(`  Launching ${spec.label} on Sepolia and Hedera testnet...`);
-      try {
-        const res = await launchAgent({
-          owner: {
-            privyUserId: OWNER_PRIVY,
-            evmAddress: OWNER_EVM,
-          },
-          label: spec.label,
-          skill: spec.skill,
-          priceAtomic: spec.priceAtomic,
-          dailyCapUsdMicro: spec.dailyCapUsdMicro,
-          zgApiKey: env.ZG_TEAM_SK_KEY,
-          zgMgmtKey: env.ZG_TEAM_MK_KEY,
-        });
-
-        console.log(`  ✅ Launched ${res.ensName}`);
-        console.log(`     Register Tx: https://sepolia.etherscan.io/tx/${res.registerTx}`);
-        console.log(`     Hedera: https://hashscan.io/testnet/account/${res.hederaAccount}`);
-        console.log(`     Resolver: ${res.resolver}`);
-
-        await syncAgentToDirectory(spec.label);
-      } catch (err) {
-        console.error(`  ❌ Failed to launch ${spec.label}:`, err);
-      }
-    } else {
-      console.log(`  Name is already taken on-chain. Syncing directory.`);
-      await syncAgentToDirectory(spec.label);
-    }
+  } else if (!(await available(s.label))) {
+    console.log(`[seed] ${name}: taken on-chain but not in our database; skipping`);
+    continue;
+  } else if (dryRun) {
+    console.log(`[seed] ${name}: would launch (price ${s.priceAtomic}, cap ${s.dailyCapUsdMicro})`);
+    continue;
+  } else {
+    console.log(`[seed] ${name}: launching on Sepolia + Hedera testnet...`);
+    const res = await launchAgent({
+      owner: OWNER,
+      label: s.label,
+      skill: s.skill,
+      priceAtomic: s.priceAtomic,
+      dailyCapUsdMicro: s.dailyCapUsdMicro,
+      zgApiKey: env.ZG_TEAM_SK_KEY,
+      ...(env.ZG_TEAM_MK_KEY ? { zgMgmtKey: env.ZG_TEAM_MK_KEY } : {}),
+    });
+    console.log(`[seed]   https://sepolia.etherscan.io/tx/${res.registerTx}`);
+    console.log(`[seed]   https://hashscan.io/testnet/account/${res.hederaAccount}`);
   }
 
-  console.log("\nRunning indexer to verify directory table...");
-  const idx = await runIndexer();
-  console.log(`Indexer finished: ${idx.indexed} agent(s) indexed.`);
-
-  const dirRows = await db.from("directory").select("label, skill, price_atomic, status");
-  console.log("\nCurrent Directory Agents:");
-  console.table(dirRows.data);
-
-  process.exit(0);
+  if (!dryRun) console.log(`[seed]   directory: ${await syncAgentToDirectory(s.label)}`);
 }
 
-main().catch((err) => {
-  console.error("Fatal seed error:", err);
-  process.exit(1);
-});
+const dir = await db
+  .from("directory")
+  .select("label,status,price_atomic,payto")
+  .order("price_atomic");
+console.table(dir.data);
+process.exit(0);
