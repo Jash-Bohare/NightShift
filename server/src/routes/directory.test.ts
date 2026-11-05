@@ -1,77 +1,106 @@
 import { describe, expect, it } from "vitest";
+import {
+  DirectoryQuery,
+  labelFromIdentifier,
+  queryDirectory,
+  toDirectoryAgent,
+  type DirectoryRow,
+} from "./directoryLogic.js";
 
-// Test directory query parsing and filtering logic
-describe("directory filtering logic", () => {
-  const sampleAgents = [
-    {
-      label: "tamil-scribe",
-      ensName: "tamil-scribe.nightshift.eth",
-      skill: "transcribe:ta",
-      price_atomic: 30000n,
-      description: "Tamil audio transcription agent",
-      reputation: { jobs: 10, success: 10, p50_ms: 12000 },
-      status: "active",
-    },
-    {
-      label: "kural",
-      ensName: "kural.nightshift.eth",
-      skill: "transcribe:ta",
-      price_atomic: 20000n,
-      description: "Fast Tamil voice scribe",
-      reputation: { jobs: 5, success: 4, p50_ms: 15000 },
-      status: "active",
-    },
-    {
-      label: "chennai-ears",
-      ensName: "chennai-ears.nightshift.eth",
-      skill: "transcribe:ta",
-      price_atomic: 50000n,
-      description: "High accuracy Tamil audio agent",
-      reputation: { jobs: 20, success: 19, p50_ms: 11000 },
-      status: "active",
-    },
-  ];
+function row(
+  label: string,
+  price: number,
+  status: string,
+  success: number,
+  jobs: number,
+): DirectoryRow {
+  return {
+    label,
+    ens_name: `${label}.nightshift.eth`,
+    owner: "0xowner",
+    resolver: "0xresolver",
+    skill: label === "hindi-ears" ? "transcribe:hi" : "transcribe:ta",
+    price_atomic: price,
+    price_unit: "minute",
+    payto: "0.0.1",
+    endpoint: `http://localhost:8787/a/${label}/run`,
+    model: "whisper-large-v3",
+    description: `${label} transcribes audio`,
+    reputation: { jobs, success, p50_ms: 10_000 },
+    status,
+    expiry: null,
+    updated_at: `2030-01-0${jobs % 9 || 1}T00:00:00Z`,
+  };
+}
 
-  it("filters by maxPrice", () => {
-    const max = 30000n;
-    const filtered = sampleAgents.filter((a) => a.price_atomic <= max);
-    expect(filtered.length).toBe(2);
-    expect(filtered.map((a) => a.label)).toEqual(["tamil-scribe", "kural"]);
+const agents = [
+  row("tamil-scribe", 30_000, "active", 1, 5),
+  row("kural", 20_000, "paused_budget", 1, 0),
+  row("chennai-ears", 50_000, "active", 0.9, 8),
+  row("sleepy", 10_000, "paused_owner", 1, 3),
+  row("hindi-ears", 25_000, "active", 1, 2),
+].map((r) => toDirectoryAgent(r, "0.0.429274"));
+
+const q = (raw: Record<string, string>) => DirectoryQuery.parse(raw);
+const labels = (raw: Record<string, string>) =>
+  queryDirectory(agents, q(raw)).agents.map((a) => a.label);
+
+describe("directory query", () => {
+  it("lists runnable agents (active + paused_budget) cheapest first by default", () => {
+    expect(labels({})).toEqual(["kural", "hindi-ears", "tamil-scribe", "chennai-ears"]);
   });
-
-  it("filters by skill", () => {
-    const filtered = sampleAgents.filter((a) => a.skill === "transcribe:ta");
-    expect(filtered.length).toBe(3);
+  it("filters by exact skill, skill family, max price and min success", () => {
+    expect(labels({ skill: "transcribe:ta" })).toEqual(["kural", "tamil-scribe", "chennai-ears"]);
+    expect(labels({ skill: "transcribe" })).toHaveLength(4);
+    expect(labels({ skill: "transcribe:ta", maxPrice: "30000" })).toEqual([
+      "kural",
+      "tamil-scribe",
+    ]);
+    expect(labels({ minSuccess: "0.95" })).not.toContain("chennai-ears");
   });
-
-  it("sorts by price ascending", () => {
-    const sorted = [...sampleAgents].sort((a, b) => Number(a.price_atomic - b.price_atomic));
-    expect(sorted[0]?.label).toBe("kural");
-    expect(sorted[1]?.label).toBe("tamil-scribe");
-    expect(sorted[2]?.label).toBe("chennai-ears");
+  it("supports explicit status filters", () => {
+    expect(labels({ status: "paused_owner" })).toEqual(["sleepy"]);
+    expect(labels({ status: "all" })).toHaveLength(5);
   });
-
-  it("sorts by reputation (success count and success rate)", () => {
-    const sorted = [...sampleAgents].sort((a, b) => {
-      const rateA = a.reputation.success / a.reputation.jobs;
-      const rateB = b.reputation.success / b.reputation.jobs;
-      if (rateB !== rateA) return rateB - rateA;
-      return b.reputation.jobs - a.reputation.jobs;
-    });
-    expect(sorted[0]?.label).toBe("tamil-scribe"); // 100% (10/10)
-    expect(sorted[1]?.label).toBe("chennai-ears"); // 95% (19/20)
-    expect(sorted[2]?.label).toBe("kural"); // 80% (4/5)
+  it("sorts by reputation and paginates with a total", () => {
+    expect(labels({ sort: "reputation", skill: "transcribe:ta" })).toEqual([
+      "tamil-scribe",
+      "kural",
+      "chennai-ears",
+    ]);
+    const page2 = queryDirectory(agents, q({ limit: "2", page: "2" }));
+    expect(page2.total).toBe(4);
+    expect(page2.agents.map((a) => a.label)).toEqual(["tamil-scribe", "chennai-ears"]);
   });
+  it("searches label, name and description", () => {
+    expect(labels({ search: "CHENNAI" })).toEqual(["chennai-ears"]);
+  });
+  it("rejects inputs that could reach a filter string", () => {
+    for (const bad of [
+      { search: "x,status.eq.revoked" },
+      { search: "a(b)" },
+      { skill: "transcribe:ta,foo" },
+      { maxPrice: "-1" },
+      { maxPrice: "1e9" },
+      { status: "deleted" },
+      { minSuccess: "2" },
+    ])
+      expect(DirectoryQuery.safeParse(bad).success).toBe(false);
+  });
+});
 
-  it("searches by keyword", () => {
-    const search = "voice";
-    const found = sampleAgents.filter(
-      (a) =>
-        a.label.includes(search) ||
-        a.ensName.includes(search) ||
-        a.description.toLowerCase().includes(search),
-    );
-    expect(found.length).toBe(1);
-    expect(found[0]?.label).toBe("kural");
+describe("labelFromIdentifier", () => {
+  it("accepts a label or full name and rejects anything else", () => {
+    expect(labelFromIdentifier("kural")).toBe("kural");
+    expect(labelFromIdentifier("Kural.nightshift.eth")).toBe("kural");
+    expect(labelFromIdentifier("x,label.neq.x")).toBeNull();
+    expect(labelFromIdentifier("kural.other.eth")).toBeNull();
+    expect(labelFromIdentifier("ab")).toBeNull();
+  });
+});
+
+describe("toDirectoryAgent", () => {
+  it("returns prices as exact integer strings with the asset", () => {
+    expect(agents[0]!.price).toEqual({ amount: "30000", asset: "0.0.429274", unit: "minute" });
   });
 });
