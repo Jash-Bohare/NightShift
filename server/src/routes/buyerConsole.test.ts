@@ -1,40 +1,44 @@
-import express from "express";
-import { describe, expect, it } from "vitest";
+import type { AddressInfo } from "node:net";
+import express, { type ErrorRequestHandler } from "express";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { ApiError } from "../errors.js";
 import { buyerConsoleRouter } from "./buyerConsole.js";
 
-describe("buyerConsoleRouter endpoints", () => {
+// Only free paths are exercised here; a real /buyer-console/run would spend testnet funds.
+describe("buyer console routes", () => {
   const app = express();
   app.use(buyerConsoleRouter);
+  const onError: ErrorRequestHandler = (err, _req, res, _next) => {
+    const e = err as ApiError;
+    res.status(e.status).json(e.toJSON());
+  };
+  app.use(onError);
+  let server: ReturnType<typeof app.listen>;
+  let base = "";
 
-  it("GET /buyer/budget returns rules and spending state", async () => {
-    const server = app.listen(0);
-    const addr = server.address() as { port: number };
-    try {
-      const res = await fetch(`http://localhost:${addr.port}/buyer/budget`);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as any;
-      expect(body.success).toBe(true);
-      expect(body.rules).toBeDefined();
-      expect(body.rules.maxPerJobAtomic).toBe("100000");
-      expect(body.state).toBeDefined();
-    } finally {
-      server.close();
-    }
+  beforeAll(() => {
+    server = app.listen(0);
+    base = `http://localhost:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => {
+    server.close();
   });
 
-  it("GET /buyer/spending returns current spend metrics", async () => {
-    const server = app.listen(0);
-    const addr = server.address() as { port: number };
-    try {
-      const res = await fetch(`http://localhost:${addr.port}/buyer/spending`);
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as any;
-      expect(body.success).toBe(true);
-      expect(body.state.date).toBeDefined();
-      expect(body.state.dailySpentAtomic).toBeDefined();
-      expect(body.state.totalSpentAtomic).toBeDefined();
-    } finally {
-      server.close();
-    }
+  it("GET /buyer-console/budget returns the rules and today's spend", async () => {
+    const res = await fetch(`${base}/buyer-console/budget`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      rules: { maxPerJobAtomic: string };
+      state: { date: string; dailySpentAtomic: string };
+    };
+    expect(body.rules.maxPerJobAtomic).toBe("100000");
+    expect(body.state.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(body.state.dailySpentAtomic).toMatch(/^\d+$/);
+  });
+
+  it("GET /buyer-console/run rejects a malformed skill before starting a run", async () => {
+    const res = await fetch(`${base}/buyer-console/run?skill=evil;drop`);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: string }).error).toBe("invalid_input");
   });
 });

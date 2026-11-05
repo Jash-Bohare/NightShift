@@ -1,125 +1,101 @@
-// Buyer Console SSE stream route: /buyer-console/run and /buyer/stream (docs/05-buyer-agent.md § Run modes)
-import { resolve } from "node:path";
-import { runBuyer, loadRules, loadState } from "@nightshift/buyer";
+// Buyer console (docs/05 run modes): GET /buyer-console/run streams one real buyer run as SSE;
+// GET /buyer-console/budget shows the buyer's spending rules and today's spend.
+// Each run spends real testnet USDC and 0G credits: one run at a time, at most one per 20 s.
+import { DEFAULT_SAMPLE_FILE, loadRules, loadState, runBuyer } from "@nightshift/buyer";
 import type { BuyerEvent } from "@nightshift/shared";
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
+import { z } from "zod";
 import { db } from "../db/client.js";
 import { ApiError } from "../errors.js";
 import { log, logError } from "../log.js";
 
 export const buyerConsoleRouter = Router();
 
-// Rate limiting: 1 run per 20 seconds (docs/08-roadmap.md § P3.5)
+export const RATE_LIMIT_MS = 20_000;
 let lastRunAt = 0;
-const RATE_LIMIT_MS = 20_000;
+let running = false;
 
-buyerConsoleRouter.get("/buyer/budget", (_req, res) => {
-  try {
-    const rules = loadRules();
-    const state = loadState();
-    res.json({ success: true, rules, state });
-  } catch (err) {
-    res.status(500).json({ error: "failed_to_load_budget", message: String(err) });
-  }
+const RunQuery = z.object({
+  skill: z
+    .string()
+    .regex(/^[a-z]+:[a-z]{2}$/)
+    .default("transcribe:ta"),
 });
 
-buyerConsoleRouter.get("/buyer/spending", (_req, res) => {
-  try {
-    const state = loadState();
-    res.json({ success: true, state });
-  } catch (err) {
-    res.status(500).json({ error: "failed_to_load_state", message: String(err) });
-  }
+buyerConsoleRouter.get("/buyer-console/budget", (_req, res) => {
+  res.json({ rules: loadRules(), state: loadState() });
 });
 
-async function handleBuyerStream(req: any, res: any) {
-  const now = Date.now();
-  const timeSinceLastRun = now - lastRunAt;
-  if (timeSinceLastRun < RATE_LIMIT_MS) {
-    const waitSec = Math.ceil((RATE_LIMIT_MS - timeSinceLastRun) / 1000);
-    throw new ApiError(429, "rate_limited", `Rate limited: please wait ${waitSec}s (1 run per 20s)`);
-  }
-  lastRunAt = now;
+function persist(event: BuyerEvent, runId: string): void {
+  void db
+    .from("buyer_events")
+    .insert({ event_type: event.kind, payload: { runId, ...event } })
+    .then(({ error }) => {
+      if (error) logError("db", `buyer_events insert (${event.kind})`, error.message);
+    });
+}
 
-  // SSE headers
+buyerConsoleRouter.get("/buyer-console/run", async (req: Request, res: Response) => {
+  const q = RunQuery.safeParse(req.query);
+  if (!q.success) throw new ApiError(422, "invalid_input", "skill must look like transcribe:ta");
+  if (running) throw new ApiError(429, "rate_limited", "a buyer run is already in progress");
+  const wait = lastRunAt + RATE_LIMIT_MS - Date.now();
+  if (wait > 0)
+    throw new ApiError(
+      429,
+      "rate_limited",
+      `one run per 20 s; retry in ${Math.ceil(wait / 1000)} s`,
+    );
+  running = true;
+  lastRunAt = Date.now();
+
+  const runId = `run-${lastRunAt}`;
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
   });
-  res.flushHeaders?.();
-
-  // Send initial connection event
-  const streamId = req.query.streamId || `stream-${Date.now()}`;
-  res.write(`: connected stream=${streamId}\n\n`);
-
-  // Periodic heartbeat every 15 s
-  const heartbeat = setInterval(() => {
-    try {
-      res.write(": ping\n\n");
-    } catch {
-      clearInterval(heartbeat);
-    }
-  }, 15_000);
-
-  let aborted = false;
-  req.on("close", () => {
-    aborted = true;
+  res.write(`: ${runId}\n\n`);
+  const heartbeat = setInterval(() => res.write(": ping\n\n"), 15_000);
+  let closed = false;
+  res.on("close", () => {
+    closed = true;
     clearInterval(heartbeat);
   });
-
-  const skill = (req.query.skill as string) || "transcribe:ta";
-  // Default to repo sample audio file
-  const samplePath = resolve(process.cwd(), "buyer/samples/tamil-90s.mp3");
-
-  log("server", "buyer stream started", { streamId, skill });
-
-  const onEvent = (event: BuyerEvent) => {
-    if (aborted) return;
-    const eventId = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const sseMessage = `id: ${eventId}\nevent: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`;
-    try {
-      res.write(sseMessage);
-    } catch {}
-
-    // Persist event to Supabase buyer_events for durability & audit
-    void db
-      .from("buyer_events")
-      .insert({
-        event_type: event.kind,
-        payload: event as any,
-      })
-      .then();
+  const send = (event: string, data: unknown) => {
+    if (!closed) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  log("server", "buyer console run started", { runId, skill: q.data.skill });
   try {
+    // The run continues if the viewer disconnects: a payment may already be in flight.
     const result = await runBuyer(
+      { skill: q.data.skill, file: DEFAULT_SAMPLE_FILE },
       {
-        skill,
-        file: samplePath,
-      },
-      {
-        onEvent,
+        onEvent: (e) => {
+          send(e.kind, e);
+          persist(e, runId);
+        },
       },
     );
-
-    if (!aborted) {
-      res.write(
-        `event: complete\ndata: ${JSON.stringify({ success: result.success, chosen: result.chosenAgent, tx: result.txId })}\n\n`,
-      );
-      res.end();
-    }
+    send("complete", {
+      success: result.success,
+      chosen: result.chosenAgent ?? null,
+      tx: result.txId ?? null,
+      error: result.error ?? null,
+    });
+    log("server", "buyer console run finished", {
+      runId,
+      success: result.success,
+      tx: result.txId,
+    });
   } catch (err) {
-    if (!aborted) {
-      res.write(`event: error\ndata: ${JSON.stringify({ error: String(err) })}\n\n`);
-      res.end();
-    }
+    logError("server", `buyer console run ${runId} crashed`, err);
+    send("complete", { success: false, chosen: null, tx: null, error: "internal error" });
   } finally {
+    running = false;
     clearInterval(heartbeat);
+    if (!closed) res.end();
   }
-}
-
-// Mount both GET /buyer-console/run and GET /buyer/stream
-buyerConsoleRouter.get("/buyer-console/run", handleBuyerStream);
-buyerConsoleRouter.get("/buyer/stream", handleBuyerStream);
+});
