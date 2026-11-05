@@ -35,6 +35,9 @@
   "exports": {
     "./launch": "./src/agents/launch.ts",
     "./ens": "./src/ens/registrar.ts",
-    "./cron": "./src/cron/reputation.ts"
+    "./ens/indexer": "./src/ens/indexer.ts",
+    "./cron": "./src/cron/reputation.ts",
+    "./config": "./src/config.ts",
+    "./db/client": "./src/db/client.ts"
   }
 }

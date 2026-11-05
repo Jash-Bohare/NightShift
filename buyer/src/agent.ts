@@ -5,7 +5,15 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
+
+const ROOT_ENV = fileURLToPath(new URL("../../.env", import.meta.url));
+if (existsSync(ROOT_ENV)) {
+  try {
+    process.loadEnvFile(ROOT_ENV);
+  } catch {}
+}
 import { createClientHederaSigner, HEDERA_TESTNET_USDC, PrivateKey } from "@x402/hedera";
 import { ExactHederaScheme } from "@x402/hedera/exact/client";
 import {
@@ -333,7 +341,8 @@ export async function runBuyer(task: BuyerTask, options: BuyerOptions = {}): Pro
 
     const jobs = vc.reputation?.jobs ?? 0;
     const success = vc.reputation?.success ?? 0;
-    if (jobs > 0 && success / jobs < rules.minSuccess) {
+    const successRate = jobs > 0 ? success / jobs : 1.0;
+    if (jobs >= 5 && successRate < rules.minSuccess) {
       rejectedList.push({
         label: vc.label,
         reason: `Success rate ${(success / jobs).toFixed(2)} is below minimum ${rules.minSuccess}`,

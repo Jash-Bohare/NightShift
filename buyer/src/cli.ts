@@ -11,10 +11,11 @@ import { loadRules, loadState } from "./spending.js";
 setDefaultAutoSelectFamilyAttemptTimeout(5_000);
 
 // Load root .env
-const ROOT_ENV = resolve(process.cwd(), ".env");
-if (existsSync(ROOT_ENV)) {
+import { fileURLToPath } from "node:url";
+const ENV_PATH = fileURLToPath(new URL("../../.env", import.meta.url));
+if (existsSync(ENV_PATH)) {
   try {
-    process.loadEnvFile(ROOT_ENV);
+    process.loadEnvFile(ENV_PATH);
   } catch {}
 }
 
