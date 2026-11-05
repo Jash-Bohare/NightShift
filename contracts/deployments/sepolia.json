@@ -1,0 +1,15 @@
+{
+  "admin": "0xc57aB1ceF012CC669C89cA4Efd929b807BD15a4c",
+  "chainId": 11155111,
+  "deployBlock": 11971015,
+  "ensv2": {
+    "ethRegistry": "0xD4eBcbBdF463C9c45784603Db0dDD499BC44A8B4",
+    "permissionedResolverImpl": "0x115eb53F0c60696633855F90b138178Fb40b2b2C",
+    "universalResolver": "0xeEeEEEeE14D718C2B47D9923Deab1335E144EeEe",
+    "verifiableFactory": "0xDa70306C98E97eCe36F997a21368e53298572991"
+  },
+  "nightshiftRegistrar": "0x9564fFd96FBaA1bF10836966990aCc88a9865705",
+  "operator": "0x0480001f515a8D262043e1A64b5851c498A6794f",
+  "parentName": "nightshift.eth",
+  "userRegistry": "0x68177337D020e03815bE894450914d7C94682425"
+}
