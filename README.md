@@ -16,11 +16,14 @@ Each agent gets an **ENS name** (`tamil-scribe.nightshift.eth`) with standard ag
 
 - `NightshiftRegistrar` deployed and verified on Sepolia; agents get `<label>.nightshift.eth` with split resolver permissions (owner edits identity, only the registrar writes `nightshift.reputation`).
 - Agent runtime (`server/`): `POST /a/:label/run` is x402-protected. A buyer pays in USDC on Hedera testnet, the server transcribes on 0G within the agent's daily budget, the payment settles only if the work succeeded, the job is logged to HCS, and a cron writes the agent's reputation to ENS.
-- Live agents on Sepolia & Hedera testnet: **`tamil-scribe.nightshift.eth`** ($0.03/min), **`kural.nightshift.eth`** ($0.02/min, tiny cap for refusal fallback demo), and **`chennai-ears.nightshift.eth`** ($0.05/min).
-- Autonomous buyer agent (`buyer/`): discovers agents via `/directory`, verifies on-chain resolver authentic and payTo match on Sepolia, scores deterministically, queries 0G for LLM rationale, enforces spending controls via x402 `PaymentPolicy`, handles 503 budget refusal fallbacks, and executes end-to-end paid transcription jobs.
-- Buyer Console stream: `/buyer-console/run` (and `/buyer/stream`) streams real-time SSE events with 20 s rate-limiting. Every proof is in [`PROOFS.md`](PROOFS.md).
+- Three live agents (Sepolia names, Hedera accounts): **`tamil-scribe.nightshift.eth`** (0.03 USDC/min), **`kural.nightshift.eth`** (0.02 USDC/min, but a 1 micro-USD daily 0G cap, so its budget guard always refuses) and **`chennai-ears.nightshift.eth`** (0.05 USDC/min).
+- Discovery: an indexer keeps a `/directory` cache in sync with registrar events and ENS records.
+- Autonomous buyer agent (`buyer/`, persona "Podcast Assistant"): discovers agents in the directory, then trusts only ENS. It checks each agent's resolver against the registrar, reads price, payTo, endpoint and reputation from ENS, ranks by its spending rules, asks 0G for a one-line rationale, requires the server's quote to match ENS, and pays through an x402 policy that only signs a transfer of that exact amount to the ENS payTo. When an agent refuses (503 over budget, never charged), it falls back to the next one.
+- Buyer console: `GET /buyer-console/run` streams one live buyer run as server-sent events.
 
-Still to build: frontend web app (`web/` in Phase 4), daily payouts (Phase 5).
+Every proof is in [`PROOFS.md`](PROOFS.md).
+
+Still to build: the web app (`web/` is a Privy login stub) and daily payouts.
 
 ---
 
@@ -107,6 +110,7 @@ Get the real values from Jash over a private channel. Never commit `.env` (it is
 | `HEDERA_*`, `TREASURY_*`, `X402_FACILITATOR_URL` | payments, HCS | testnet operator account pays account creation and HCS fees |
 | `BUYER_*` | test buyer scripts | testnet account holding test USDC |
 | `SEPOLIA_RPC_URL`, `ENS_OPERATOR_PRIVATE_KEY` | ENS reads/writes | operator is the registrar's hot key |
+| `SEPOLIA_LOGS_RPC_URL` | indexer event scans | optional; a public node, because Alchemy's free tier caps `eth_getLogs` ranges |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | database | service-role key is server only |
 | `PRIVY_*` | owner login | our own Privy app |
 
@@ -119,7 +123,8 @@ Want your own fresh setup instead of shared keys? You need: a 0G account at http
 ```bash
 pnpm typecheck                 # all packages
 pnpm lint
-pnpm -C server test            # vitest: pricing, budget guard, crypto, records, reputation
+pnpm -C server test            # vitest: pricing, budget guard, crypto, records, reputation, directory
+pnpm -C buyer test             # vitest: buyer decision rules, quote and payment-policy checks, spending
 pnpm -C contracts test         # forge: unit + fuzz + invariant + Sepolia fork tests (needs SEPOLIA_RPC_URL)
 pnpm -C contracts test:unit    # same without the fork tests (no RPC needed)
 ```
@@ -149,10 +154,14 @@ curl localhost:8787/health     # {"ok":true,"zg":{...},"hedera":{...},"sepolia":
 | Method | Path | What it does |
 |---|---|---|
 | GET | `/health` | Checks 0G, Hedera mirror node, Sepolia RPC, Supabase |
+| GET | `/directory?skill=&maxPrice=&minSuccess=&search=&status=&sort=&page=&limit=` | Agent search. Default lists runnable agents (`active`, `paused_budget`) cheapest first. Returns `{agents, total, page, limit}` |
+| GET | `/directory/:name` | One directory entry (`kural` or `kural.nightshift.eth`) |
 | GET | `/agents/:label` | Agent profile: database row + live ENS records + today's earnings |
 | GET | `/a/:label/quote?units=2` | Free price quote `{amount, asset, network, payTo, unit}` |
 | POST | `/a/:label/run` | **x402-paid.** Multipart `file` + header `X-Nightshift-Units: <minutes>`. Returns `{job_id, output, zg:{request_id, provider}}` and a `PAYMENT-RESPONSE` header with the Hedera tx |
 | GET | `/stats` | Active agents, jobs, USDC earned and 0G credits used today |
+| GET | `/buyer-console/run?skill=transcribe:ta` | **Spends funds.** Runs the buyer once on the sample clip and streams its steps as server-sent events. One run at a time, at most one per 20 s |
+| GET | `/buyer-console/budget` | The buyer's spending rules and today's spend |
 
 Errors before payment (nobody pays for these): `404 not_found`, `409 agent_paused`, `422 invalid_input` / `units_mismatch`, `503 over_budget` / `no_credits`.
 
@@ -165,6 +174,20 @@ pnpm -C scripts exec tsx pay-run.ts tamil-scribe ../buyer/samples/tamil-90s.mp3 
 ```
 
 Expected: a quote, `/run -> 200`, the Tamil transcript, a `settled` line with a HashScan link, and the agent's USDC balance going up. The server log shows `verified → transcribed → job done → settled → HCS message`.
+
+### Run the buyer agent (costs ~0.06 test USDC + ~$0.0125 of 0G credits)
+
+With the server running, in a second terminal:
+
+```bash
+pnpm -C buyer start                                    # defaults: --skill transcribe:ta --file buyer/samples/tamil-90s.mp3
+pnpm -C buyer start -- --skill transcribe:ta --file ./samples/tamil-90s.mp3
+curl -N localhost:8787/buyer-console/run               # the same run, streamed as server-sent events
+```
+
+Expected: `PLAN` (2 min), `DISCOVER` 3 candidates, `VERIFY` ✅ ×3, `DECIDE kural` → `REFUSED` (503 over budget, not charged) → `DECIDE tamil-scribe` → `QUOTE` 0.06 USDC (matches ENS) → `PAID` with a HashScan link → `RESULT` with the Tamil transcript, job id and 0G request id. Spending rules live in `buyer/rules.json`; today's spend in `buyer/.state.json` (resets each UTC day).
+
+To reset the three demo agents (caps, directory) at any time: `pnpm -C scripts exec tsx seed-agents.ts` (add `--dry-run` to preview).
 
 ### Write reputation to ENS now (instead of waiting for the 10-minute cron)
 

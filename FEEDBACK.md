@@ -20,6 +20,8 @@ Running notes on sponsor developer experience, doc corrections and go/no-go deci
 
 ## ENS
 
+- (P3.1) Indexing registrar events: Alchemy's free tier caps `eth_getLogs` block ranges, and `ethereum-sepolia-rpc.publicnode.com` serves wide ranges but returns `pruned history unavailable` about 100k blocks back. Two RPCs also disagree on the head block by one or two, so a log scan must read its `toBlock` from the same node (we stay 2 blocks behind). The indexer keeps a checkpoint and never scans more than 50k blocks.
+
 - (P2.5) `registerAgent` with 8 records cost 8.19M gas on Sepolia, about half the 16.7M per-tx cap. A launch with many more records would need a second tx.
 
 - ENSv2 on Sepolia worked first try from viem: UserRegistry via VerifiableFactory → `setSubregistry` on ETHRegistry → per-name PermissionedResolver → `register` → `setText`, and viem 2.57's `getEnsText` resolved it through the Universal Resolver with no overrides. The deployed-ABI JSONs in `contracts/deployments/sepolia/` were the fastest source of truth.
