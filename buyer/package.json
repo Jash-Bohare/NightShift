@@ -5,9 +5,25 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@nightshift/shared": "workspace:*"
+    "@hiero-ledger/sdk": "2.85.0",
+    "@nightshift/shared": "workspace:*",
+    "@x402/core": "2.28.0",
+    "@x402/fetch": "2.28.0",
+    "@x402/hedera": "2.28.0",
+    "music-metadata": "^12.3.4",
+    "viem": "^2.57.10",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "vitest": "^5.1.0"
+  },
+  "exports": {
+    "./agent": "./src/agent.ts",
+    "./spending": "./src/spending.ts",
+    "./rules": "./src/rules.ts"
   }
 }

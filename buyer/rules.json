@@ -1,0 +1,9 @@
+{
+  "maxPerJobAtomic": "100000",
+  "dailyBudgetAtomic": "1000000",
+  "allowedAssets": ["0.0.429274"],
+  "allowedNetworks": ["hedera:testnet"],
+  "allowParentNames": ["nightshift.eth"],
+  "minSuccess": 0.9,
+  "humanApprovalAboveAtomic": "500000"
+}
