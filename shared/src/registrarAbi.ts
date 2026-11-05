@@ -1,0 +1,660 @@
+// Generated from shared/abi/NightshiftRegistrar.json (forge export, P1.5). Regenerate if the contract changes.
+export const nightshiftRegistrarAbi = [
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "registry",
+        type: "address",
+        internalType: "contract IPermissionedRegistry",
+      },
+      {
+        name: "factory",
+        type: "address",
+        internalType: "contract IVerifiableFactory",
+      },
+      {
+        name: "resolverImpl",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "parentName",
+        type: "string",
+        internalType: "string",
+      },
+      {
+        name: "operator_",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "admin_",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "DEFAULT_TERM",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "FACTORY",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "contract IVerifiableFactory",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "INITIAL_REPUTATION",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "MAX_TERM",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "OWNER_REGISTRY_ROLES",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "PARENT_DNS",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "REGISTRY",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "contract IPermissionedRegistry",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "REPUTATION_KEY",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "RESOLVER_IMPL",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "admin",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "available",
+    inputs: [
+      {
+        name: "label",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "dnsNameOf",
+    inputs: [
+      {
+        name: "label",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "isOwnerKey",
+    inputs: [
+      {
+        name: "key",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "pure",
+  },
+  {
+    type: "function",
+    name: "isValidLabel",
+    inputs: [
+      {
+        name: "label",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "pure",
+  },
+  {
+    type: "function",
+    name: "operator",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "ownerKeys",
+    inputs: [],
+    outputs: [
+      {
+        name: "keys",
+        type: "string[9]",
+        internalType: "string[9]",
+      },
+    ],
+    stateMutability: "pure",
+  },
+  {
+    type: "function",
+    name: "ownerOf",
+    inputs: [
+      {
+        name: "labelhash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "owner",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "paused",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "registerAgent",
+    inputs: [
+      {
+        name: "label",
+        type: "string",
+        internalType: "string",
+      },
+      {
+        name: "owner",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "initial",
+        type: "tuple[]",
+        internalType: "struct NightshiftRegistrar.Record[]",
+        components: [
+          {
+            name: "key",
+            type: "string",
+            internalType: "string",
+          },
+          {
+            name: "value",
+            type: "string",
+            internalType: "string",
+          },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: "resolver",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "tokenId",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "registrations",
+    inputs: [
+      {
+        name: "labelhash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "count",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "renew",
+    inputs: [
+      {
+        name: "label",
+        type: "string",
+        internalType: "string",
+      },
+      {
+        name: "duration",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "resolverOf",
+    inputs: [
+      {
+        name: "labelhash",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "resolver",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "revoke",
+    inputs: [
+      {
+        name: "label",
+        type: "string",
+        internalType: "string",
+      },
+      {
+        name: "reason",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setOperator",
+    inputs: [
+      {
+        name: "operator_",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setPaused",
+    inputs: [
+      {
+        name: "paused_",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setReputation",
+    inputs: [
+      {
+        name: "label",
+        type: "string",
+        internalType: "string",
+      },
+      {
+        name: "json",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "event",
+    name: "AgentRegistered",
+    inputs: [
+      {
+        name: "labelhash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "label",
+        type: "string",
+        indexed: false,
+        internalType: "string",
+      },
+      {
+        name: "owner",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "resolver",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+      {
+        name: "tokenId",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "expiry",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "AgentRenewed",
+    inputs: [
+      {
+        name: "labelhash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "newExpiry",
+        type: "uint64",
+        indexed: false,
+        internalType: "uint64",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "AgentRevoked",
+    inputs: [
+      {
+        name: "labelhash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "reason",
+        type: "string",
+        indexed: false,
+        internalType: "string",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "OperatorChanged",
+    inputs: [
+      {
+        name: "operator",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "PausedSet",
+    inputs: [
+      {
+        name: "paused",
+        type: "bool",
+        indexed: false,
+        internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "ReputationUpdated",
+    inputs: [
+      {
+        name: "labelhash",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "value",
+        type: "string",
+        indexed: false,
+        internalType: "string",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "error",
+    name: "DNSEncodingFailed",
+    inputs: [
+      {
+        name: "ens",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "InvalidLabel",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidOwner",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "KeyNotAllowed",
+    inputs: [
+      {
+        name: "key",
+        type: "string",
+        internalType: "string",
+      },
+    ],
+  },
+  {
+    type: "error",
+    name: "NameTaken",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotAdmin",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotOperator",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "Paused",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TermTooLong",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "UnknownAgent",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ZeroAddress",
+    inputs: [],
+  },
+] as const;
