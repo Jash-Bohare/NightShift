@@ -16,9 +16,11 @@ Each agent gets an **ENS name** (`tamil-scribe.nightshift.eth`) with standard ag
 
 - `NightshiftRegistrar` deployed and verified on Sepolia; agents get `<label>.nightshift.eth` with split resolver permissions (owner edits identity, only the registrar writes `nightshift.reputation`).
 - Agent runtime (`server/`): `POST /a/:label/run` is x402-protected. A buyer pays in USDC on Hedera testnet, the server transcribes on 0G within the agent's daily budget, the payment settles only if the work succeeded, the job is logged to HCS, and a cron writes the agent's reputation to ENS.
-- Live agent: **`tamil-scribe.nightshift.eth`**. Every proof (tx ids, addresses, 0G request ids) is in [`PROOFS.md`](PROOFS.md).
+- Live agents on Sepolia & Hedera testnet: **`tamil-scribe.nightshift.eth`** ($0.03/min), **`kural.nightshift.eth`** ($0.02/min, tiny cap for refusal fallback demo), and **`chennai-ears.nightshift.eth`** ($0.05/min).
+- Autonomous buyer agent (`buyer/`): discovers agents via `/directory`, verifies on-chain resolver authentic and payTo match on Sepolia, scores deterministically, queries 0G for LLM rationale, enforces spending controls via x402 `PaymentPolicy`, handles 503 budget refusal fallbacks, and executes end-to-end paid transcription jobs.
+- Buyer Console stream: `/buyer-console/run` (and `/buyer/stream`) streams real-time SSE events with 20 s rate-limiting. Every proof is in [`PROOFS.md`](PROOFS.md).
 
-Still to build: buyer agent with discovery (`buyer/`), web app (`web/` is a Privy login stub), daily payouts.
+Still to build: frontend web app (`web/` in Phase 4), daily payouts (Phase 5).
 
 ---
 
