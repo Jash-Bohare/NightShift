@@ -1,0 +1,16 @@
+{
+  "name": "@nightshift/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "forge build",
+    "test": "set -a && . ../.env && set +a && forge test -vvv",
+    "test:unit": "forge test -vvv --no-match-path 'test/fork/*'",
+    "coverage": "forge coverage --report summary --no-match-path 'test/fork/*' --no-match-coverage '(lib|test)/'",
+    "abi": "forge inspect NightshiftRegistrar abi --json > ../shared/abi/NightshiftRegistrar.json",
+    "deploy:registry": "set -a && . ../.env && set +a && forge script script/00_DeployUserRegistry.s.sol --rpc-url sepolia --broadcast --skip-simulation -g 110 --slow",
+    "deploy:registrar": "set -a && . ../.env && set +a && forge script script/01_DeployRegistrar.s.sol --rpc-url sepolia --broadcast --skip-simulation -g 110 --slow",
+    "smoke:register": "set -a && . ../.env && set +a && forge script script/02_SmokeRegister.s.sol --rpc-url sepolia --broadcast --skip-simulation -g 110 --slow",
+    "smoke:permissions": "set -a && . ../.env && set +a && bash script/smoke.sh"
+  }
+}
