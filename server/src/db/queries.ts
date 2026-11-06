@@ -24,6 +24,11 @@ export function clearAgentCache(): void {
   agentCache.clear();
 }
 
+/** Drop one cached agent row so an owner change (cap, price) is read fresh on the next request. */
+export function forgetAgent(label: string): void {
+  agentCache.delete(label);
+}
+
 export async function setAgentStatus(agent: AgentRow, status: AgentStatus): Promise<void> {
   must(
     "set agent status",

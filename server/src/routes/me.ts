@@ -9,6 +9,7 @@ export const meRouter = Router();
 const OwnerRow = z.object({
   id: z.string().uuid(),
   evm_address: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  hedera_payout_account: z.string().nullable().optional(),
   created_at: z.string().datetime({ offset: true }),
 });
 
@@ -32,7 +33,58 @@ const AgentRow = z.object({
   ]),
   expiry: z.string().datetime({ offset: true }).nullable(),
   created_at: z.string().datetime({ offset: true }),
+  hedera_account_id: z.string().nullable().optional(),
+  resolver_address: z.string().nullable().optional(),
+  register_tx: z.string().nullable().optional(),
 });
+
+const TodayJobRow = z.object({
+  agent_id: z.string().uuid(),
+  status: z.string(),
+  price_atomic: z.union([z.string().regex(/^\d+$/), z.number().int().safe().nonnegative()]),
+  zg_cost_usd_micro: z
+    .union([z.string().regex(/^\d+$/), z.number().int().safe().nonnegative()])
+    .nullable(),
+});
+
+export interface TodayUsage {
+  spentUsdMicro: string;
+  earnedAtomic: string;
+  jobsSettled: number;
+}
+
+/**
+ * Today's (UTC) usage per agent, computed the same way as the budget guard: 0G spend sums every
+ * job's recorded cost; earnings and the settled count include only settled jobs.
+ */
+export function summarizeToday(rows: z.infer<typeof TodayJobRow>[]): Map<string, TodayUsage> {
+  const out = new Map<string, { spent: bigint; earned: bigint; settled: number }>();
+  for (const row of rows) {
+    const acc = out.get(row.agent_id) ?? { spent: 0n, earned: 0n, settled: 0 };
+    if (row.zg_cost_usd_micro !== null) acc.spent += BigInt(row.zg_cost_usd_micro);
+    if (row.status === "settled") {
+      acc.earned += BigInt(row.price_atomic);
+      acc.settled += 1;
+    }
+    out.set(row.agent_id, acc);
+  }
+  return new Map(
+    [...out].map(([id, a]) => [
+      id,
+      {
+        spentUsdMicro: a.spent.toString(),
+        earnedAtomic: a.earned.toString(),
+        jobsSettled: a.settled,
+      },
+    ]),
+  );
+}
+
+function utcDayStartIso(now = new Date()): string {
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  ).toISOString();
+}
 
 function atomicString(value: string | number): string {
   if (typeof value === "number" && !Number.isSafeInteger(value))
@@ -45,7 +97,7 @@ meRouter.get("/me", async (req, res) => {
   const privyUserId = await authenticatePrivyUser(req.header("authorization"));
   const ownerResult = await db
     .from("owners")
-    .select("id,evm_address,created_at")
+    .select("id,evm_address,hedera_payout_account,created_at")
     .eq("privy_user_id", privyUserId)
     .maybeSingle();
   if (ownerResult.error)
@@ -61,16 +113,38 @@ meRouter.get("/me", async (req, res) => {
   const agentsResult = await db
     .from("agents")
     .select(
-      "id,label,ens_name,skill,model,price_atomic,price_unit,daily_cap_usd_micro,status,expiry,created_at",
+      "id,label,ens_name,skill,model,price_atomic,price_unit,daily_cap_usd_micro,status,expiry,created_at,hedera_account_id,resolver_address,register_tx",
     )
     .eq("owner_id", owner.data.id)
     .order("created_at", { ascending: false });
   if (agentsResult.error)
     throw new UpstreamError("db", `owner agent roster: ${agentsResult.error.message}`);
 
-  const agents = (agentsResult.data ?? []).map((row: unknown) => {
+  const parsedAgents = (agentsResult.data ?? []).map((row: unknown) => {
     const parsed = AgentRow.safeParse(row);
     if (!parsed.success) throw new UpstreamError("db", "owner agent record is malformed");
+    return parsed;
+  });
+  let today = new Map<string, TodayUsage>();
+  if (parsedAgents.length > 0) {
+    const todayResult = await db
+      .from("jobs")
+      .select("agent_id,status,price_atomic,zg_cost_usd_micro")
+      .in(
+        "agent_id",
+        parsedAgents.map((a) => a.data.id),
+      )
+      .gte("created_at", utcDayStartIso());
+    if (todayResult.error)
+      throw new UpstreamError("db", `owner usage today: ${todayResult.error.message}`);
+    const rows = (todayResult.data ?? []).map((raw: unknown) => {
+      const parsed = TodayJobRow.safeParse(raw);
+      if (!parsed.success) throw new UpstreamError("db", "owner usage record is malformed");
+      return parsed.data;
+    });
+    today = summarizeToday(rows);
+  }
+  const agents = parsedAgents.map((parsed) => {
     return {
       id: parsed.data.id,
       label: parsed.data.label,
@@ -83,12 +157,20 @@ meRouter.get("/me", async (req, res) => {
       status: parsed.data.status,
       expiry: parsed.data.expiry,
       createdAt: parsed.data.created_at,
+      hederaAccountId: parsed.data.hedera_account_id ?? null,
+      resolverAddress: parsed.data.resolver_address ?? null,
+      registerTx: parsed.data.register_tx ?? null,
+      today: today.get(parsed.data.id) ?? { spentUsdMicro: "0", earnedAtomic: "0", jobsSettled: 0 },
     };
   });
 
   res.setHeader("Cache-Control", "no-store");
   res.json({
-    owner: { evmAddress: owner.data.evm_address, createdAt: owner.data.created_at },
+    owner: {
+      evmAddress: owner.data.evm_address,
+      hederaPayoutAccount: owner.data.hedera_payout_account ?? null,
+      createdAt: owner.data.created_at,
+    },
     agents,
   });
 });
@@ -111,6 +193,7 @@ const OwnerJobRow = z.object({
     .union([z.string().regex(/^\d+$/), z.number().int().safe().nonnegative()])
     .nullable(),
   hedera_tx_id: z.string().nullable(),
+  zg_request_id: z.string().nullable().optional(),
   hcs_sequence: z
     .union([z.string().regex(/^\d+$/), z.number().int().safe().nonnegative()])
     .nullable(),
@@ -150,7 +233,7 @@ meRouter.get("/me/jobs", async (req, res) => {
   let builder = db
     .from("jobs")
     .select(
-      "id,status,units,price_atomic,zg_cost_usd_micro,hedera_tx_id,hcs_sequence,output_sha256,latency_ms,created_at,agents!inner(label,owner_id)",
+      "id,status,units,price_atomic,zg_cost_usd_micro,hedera_tx_id,zg_request_id,hcs_sequence,output_sha256,latency_ms,created_at,agents!inner(label,owner_id)",
     )
     .eq("agents.owner_id", ownerId);
   if (label) builder = builder.eq("agents.label", label);
@@ -174,6 +257,7 @@ meRouter.get("/me/jobs", async (req, res) => {
       zgCostUsdMicro:
         parsed.data.zg_cost_usd_micro === null ? null : String(parsed.data.zg_cost_usd_micro),
       hederaTxId: parsed.data.hedera_tx_id,
+      zgRequestId: parsed.data.zg_request_id ?? null,
       hcsSequence: parsed.data.hcs_sequence === null ? null : String(parsed.data.hcs_sequence),
       outputSha256: parsed.data.output_sha256,
       latencyMs: parsed.data.latency_ms,

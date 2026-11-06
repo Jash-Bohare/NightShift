@@ -9,6 +9,8 @@ const state = vi.hoisted(() => ({
     created_at: "2026-03-02T00:00:00.000Z",
   } as Record<string, unknown> | null,
   agents: [] as Record<string, unknown>[],
+  todayJobs: [] as Record<string, unknown>[],
+  jobsAgentFilter: [] as string[],
   ownerIdFilter: "",
   from: vi.fn(),
 }));
@@ -82,8 +84,33 @@ describe("owner dashboard API", () => {
         hedera_private_key_enc: "must-not-appear",
       },
     ];
+    state.todayJobs = [
+      {
+        agent_id: "8962ca34-6b72-4741-91aa-4ba98480a99e",
+        status: "settled",
+        price_atomic: "60000",
+        zg_cost_usd_micro: "12480",
+      },
+      {
+        agent_id: "8962ca34-6b72-4741-91aa-4ba98480a99e",
+        status: "refused_budget",
+        price_atomic: "60000",
+        zg_cost_usd_micro: null,
+      },
+      {
+        agent_id: "8962ca34-6b72-4741-91aa-4ba98480a99e",
+        status: "running",
+        price_atomic: "30000",
+        zg_cost_usd_micro: "100",
+      },
+    ];
     state.from.mockImplementation((table: string) => ({
       select: () => ({
+        in: (column: string, ids: string[]) => {
+          if (table !== "jobs" || column !== "agent_id") throw new Error(`unexpected in ${table}`);
+          state.jobsAgentFilter = ids;
+          return { gte: async () => ({ data: state.todayJobs, error: null }) };
+        },
         eq: (column: string, value: string) => {
           if (table === "owners") {
             return {
@@ -127,6 +154,12 @@ describe("owner dashboard API", () => {
       priceAtomic: "30000",
       dailyCapUsdMicro: "500000",
     });
+    expect(body.agents[0]!.today).toEqual({
+      spentUsdMicro: "12580",
+      earnedAtomic: "60000",
+      jobsSettled: 1,
+    });
+    expect(state.jobsAgentFilter).toEqual(["8962ca34-6b72-4741-91aa-4ba98480a99e"]);
     expect(body.agents[0]).not.toHaveProperty("zg_api_key_enc");
     expect(body.agents[0]).not.toHaveProperty("hedera_private_key_enc");
   });
