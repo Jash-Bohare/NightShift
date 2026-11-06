@@ -35,3 +35,14 @@ export function formatElapsed(milliseconds: number): string {
   const seconds = total % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
+
+/**
+ * Elapsed time for a running operation, safe to call on every render. `now` comes from a clock
+ * that ticks once per second, so right after a start it can be slightly behind `startedAt`: that
+ * lag is clamped to 00:00 rather than treated as an error. Returns null when no start time is
+ * known (for example a run resumed after a page reload).
+ */
+export function formatElapsedSince(startedAt: number, now: number): string | null {
+  if (!Number.isFinite(startedAt) || startedAt <= 0 || !Number.isFinite(now)) return null;
+  return formatElapsed(Math.max(0, now - startedAt));
+}

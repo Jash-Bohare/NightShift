@@ -1,4 +1,5 @@
 import type { BuyerEvent } from "@nightshift/shared/buyerEvents";
+import type { BuyerBudget } from "./api";
 
 export type WireState =
   "waiting" | "found" | "verified" | "chosen" | "refused" | "paying" | "paid" | "done";
@@ -111,6 +112,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+/** Integer string in atomic units: the only shape the page may pass to BigInt. */
+function isAtomic(value: unknown): value is string {
+  return typeof value === "string" && /^\d{1,30}$/.test(value);
+}
+
 function isBuyerEvent(kind: string, value: unknown): value is BuyerEvent {
   if (!isRecord(value) || value.kind !== kind || typeof value.timestamp !== "string") return false;
   switch (kind) {
@@ -130,7 +136,7 @@ function isBuyerEvent(kind: string, value: unknown): value is BuyerEvent {
             typeof candidate.label === "string" &&
             typeof candidate.ensName === "string" &&
             typeof candidate.skill === "string" &&
-            typeof candidate.priceAtomic === "string",
+            isAtomic(candidate.priceAtomic),
         )
       );
     case "verify":
@@ -149,7 +155,7 @@ function isBuyerEvent(kind: string, value: unknown): value is BuyerEvent {
     case "quote":
       return (
         typeof value.label === "string" &&
-        typeof value.amount === "string" &&
+        isAtomic(value.amount) &&
         typeof value.asset === "string" &&
         typeof value.units === "number"
       );
@@ -164,7 +170,7 @@ function isBuyerEvent(kind: string, value: unknown): value is BuyerEvent {
     case "paid":
       return (
         typeof value.label === "string" &&
-        typeof value.amount === "string" &&
+        isAtomic(value.amount) &&
         typeof value.txId === "string" &&
         typeof value.hashscanUrl === "string"
       );
@@ -175,4 +181,33 @@ function isBuyerEvent(kind: string, value: unknown): value is BuyerEvent {
     default:
       return false;
   }
+}
+
+/**
+ * GET /buyer-console/budget, validated once at the boundary so every amount the page renders
+ * (and passes to BigInt) is an integer string. Throws a readable error instead of crashing.
+ */
+export function parseBuyerBudget(value: unknown): BuyerBudget {
+  const bad = () => new Error("The buyer budget response is malformed.");
+  if (!isRecord(value) || !isRecord(value.rules) || !isRecord(value.state)) throw bad();
+  const { rules, state, wallet } = value;
+  for (const key of ["maxPerJobAtomic", "dailyBudgetAtomic", "humanApprovalAboveAtomic"])
+    if (!isAtomic(rules[key])) throw bad();
+  if (!isAtomic(state.dailySpentAtomic) || !isAtomic(state.totalSpentAtomic)) throw bad();
+  if (
+    typeof rules.minSuccess !== "number" ||
+    !Array.isArray(rules.allowParentNames) ||
+    !rules.allowParentNames.every((n) => typeof n === "string")
+  )
+    throw bad();
+  if (wallet !== undefined && wallet !== null) {
+    if (
+      !isRecord(wallet) ||
+      typeof wallet.accountId !== "string" ||
+      (wallet.usdcAtomic !== null && !isAtomic(wallet.usdcAtomic)) ||
+      (wallet.error !== undefined && typeof wallet.error !== "string")
+    )
+      throw bad();
+  }
+  return value as unknown as BuyerBudget;
 }

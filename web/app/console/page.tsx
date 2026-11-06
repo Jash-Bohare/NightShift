@@ -14,10 +14,11 @@ import { serverGet, type BuyerBudget } from "../../lib/api";
 import {
   reduceConsole,
   initialConsoleState,
+  parseBuyerBudget,
   parseBuyerEvent,
   parseSseFrame,
 } from "../../lib/console";
-import { formatElapsed } from "../../lib/time";
+import { formatElapsedSince } from "../../lib/time";
 import { publicEnv } from "../../lib/public-env";
 import { hashscanAccountUrl, hashscanTransactionUrl } from "../../lib/explorers";
 import { useClock } from "../../lib/use-clock";
@@ -71,7 +72,9 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
       const accessToken = await auth?.getAccessToken();
       if (!accessToken)
         throw new Error("Sign in with an authorized Privy account to view the buyer budget.");
-      return serverGet<BuyerBudget>("/buyer-console/budget", signal, accessToken);
+      return parseBuyerBudget(
+        await serverGet<unknown>("/buyer-console/budget", signal, accessToken),
+      );
     },
     refetchInterval: 30_000,
   });
@@ -100,7 +103,7 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
   });
   const elapsed =
     state.phase === "running" || state.phase === "resuming"
-      ? formatElapsed(now - startAt.current)
+      ? formatElapsedSince(startAt.current, now)
       : null;
 
   useEffect(() => {

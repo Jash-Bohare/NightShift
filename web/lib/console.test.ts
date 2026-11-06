@@ -84,3 +84,65 @@ describe("buyer console SSE handling", () => {
     expect(resumed.error).toBeNull();
   });
 });
+
+describe("amount validation (values later passed to BigInt)", () => {
+  const paid = (amount: unknown) =>
+    JSON.stringify({
+      kind: "paid",
+      timestamp: "now",
+      label: "tamil-scribe",
+      amount,
+      txId: "0.0.1@1.2",
+      hashscanUrl: "https://hashscan.io/testnet/transaction/x",
+    });
+  it("accepts integer-string amounts and rejects anything BigInt would throw on", () => {
+    expect(() => parseBuyerEvent("paid", paid("60000"))).not.toThrow();
+    for (const bad of ["0.06", "", "abc", 60000])
+      expect(() => parseBuyerEvent("paid", paid(bad)), String(bad)).toThrow();
+  });
+});
+
+describe("parseBuyerBudget", () => {
+  const budget = {
+    rules: {
+      maxPerJobAtomic: "100000",
+      dailyBudgetAtomic: "1000000",
+      allowedAssets: ["0.0.429274"],
+      allowedNetworks: ["hedera:testnet"],
+      allowParentNames: ["nightshift.eth"],
+      minSuccess: 0.9,
+      humanApprovalAboveAtomic: "500000",
+    },
+    state: {
+      date: "2030-11-06",
+      dailySpentAtomic: "120000",
+      totalSpentAtomic: "800000",
+      jobsCompleted: 9,
+      lastUpdated: "x",
+    },
+    wallet: { accountId: "0.0.11129925", usdcAtomic: "19130000" },
+  };
+  it("accepts the real server shape, with or without a wallet balance", async () => {
+    const { parseBuyerBudget } = await import("./console");
+    expect(parseBuyerBudget(budget)).toEqual(budget);
+    expect(() => parseBuyerBudget({ ...budget, wallet: null })).not.toThrow();
+    expect(() => parseBuyerBudget({ rules: budget.rules, state: budget.state })).not.toThrow();
+    expect(() =>
+      parseBuyerBudget({
+        ...budget,
+        wallet: { accountId: "0.0.1", usdcAtomic: null, error: "mirror node unavailable" },
+      }),
+    ).not.toThrow();
+  });
+  it("rejects malformed amounts with a readable error instead of crashing the page", async () => {
+    const { parseBuyerBudget } = await import("./console");
+    for (const bad of [
+      { ...budget, rules: { ...budget.rules, dailyBudgetAtomic: 1000000 } },
+      { ...budget, state: { ...budget.state, dailySpentAtomic: undefined } },
+      { ...budget, wallet: { accountId: "0.0.1", usdcAtomic: "19.13" } },
+      { rules: budget.rules },
+      null,
+    ])
+      expect(() => parseBuyerBudget(bad)).toThrow(/malformed/);
+  });
+});
