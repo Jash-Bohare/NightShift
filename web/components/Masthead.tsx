@@ -8,12 +8,13 @@ import { publicEnv } from "../lib/public-env";
 import { truncateMiddle } from "../lib/truncate";
 import { TicketCountdown } from "./ui/TicketCountdown";
 
+// Hosted demo (NEXT_PUBLIC_DEMO_MODE): owner pages need localhost Privy, so they are not linked.
 const navigation = [
-  { href: "/console", label: "Console" },
-  { href: "/directory", label: "Directory" },
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/launch", label: "Launch" },
-];
+  { href: "/console", label: "Console", owner: false },
+  { href: "/directory", label: "Directory", owner: false },
+  { href: "/dashboard", label: "Dashboard", owner: true },
+  { href: "/launch", label: "Launch", owner: true },
+].filter((item) => !publicEnv.demoMode || !item.owner);
 
 export function Masthead() {
   const pathname = usePathname();
@@ -69,7 +70,11 @@ export function Masthead() {
 
         <div className="masthead__actions">
           <TicketCountdown compact />
-          {publicEnv.privyAppId ? <PrivyControls /> : <DisabledSignIn />}
+          {publicEnv.demoMode ? null : publicEnv.privyAppId ? (
+            <PrivyControls />
+          ) : (
+            <DisabledSignIn />
+          )}
         </div>
       </div>
     </header>

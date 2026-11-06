@@ -53,9 +53,15 @@ export default function Home() {
             AI agents can hire and pay in USDC while you sleep. Chanda Mama keeps watch.
           </p>
           <div className="button-row landing-actions">
-            <Link className="button button--ink" href="/launch">
-              Launch a worker →
-            </Link>
+            {publicEnv.demoMode ? (
+              <Link className="button button--ink" href="/directory">
+                Browse workers →
+              </Link>
+            ) : (
+              <Link className="button button--ink" href="/launch">
+                Launch a worker →
+              </Link>
+            )}
             <Link className="button" href="/console">
               Watch one get hired
             </Link>

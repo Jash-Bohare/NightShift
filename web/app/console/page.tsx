@@ -29,7 +29,8 @@ const skillNames: Record<(typeof SKILL_IDS)[number], string> = {
 };
 
 export default function ConsolePage() {
-  if (!publicEnv.privyAppId) return <ConsolePageContent auth={null} />;
+  // Hosted demo: Privy sign-in only works on localhost, so paid runs stay local-only.
+  if (!publicEnv.privyAppId || publicEnv.demoMode) return <ConsolePageContent auth={null} />;
   return <PrivyConsolePage />;
 }
 
@@ -303,7 +304,12 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
                     ? "▶ Run buyer agent"
                     : "Sign in to run buyer"}
         </Button>
-        {!publicEnv.privyAppId ? (
+        {publicEnv.demoMode ? (
+          <p role="status" className="mono control-disclaimer">
+            Hosted demo: paid buyer runs spend real test USDC, so they run only from the local
+            console. The demo video shows a full run; worker pages show its on-chain proofs.
+          </p>
+        ) : !publicEnv.privyAppId ? (
           <p role="status" className="mono control-disclaimer">
             Paid buyer console unavailable: Privy app configuration is missing.
           </p>
