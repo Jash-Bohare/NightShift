@@ -424,7 +424,7 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
                     href={`/agents/${encodeURIComponent(name)}`}
                     key={name}
                   >
-                    <MoonAvatar size={34} label={`${name}, ${status}`} />
+                    <MoonAvatar size={34} label={`${name}, ${status}`} seed={name} />
                     <span className="wire-worker__name">
                       <strong>{name}</strong>
                       <small className="mono">{statusLabel(status)}</small>

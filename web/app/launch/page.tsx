@@ -571,7 +571,7 @@ function LaunchWizard() {
       <aside className="wizard-summary">
         <div className="id-card__band mono">NIGHTSHIFT · WORKER ID</div>
         <div className="wizard-preview">
-          <MoonAvatar size={60} label="New worker" />
+          <MoonAvatar size={60} label="New worker" seed={label} />
           <div>
             <strong>{label || "Your worker"}</strong>
             <span className="mono">.{publicEnv.ensParentName}</span>

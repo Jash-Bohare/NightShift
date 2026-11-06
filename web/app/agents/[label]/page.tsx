@@ -172,7 +172,7 @@ export default function AgentPage() {
           <div className="id-card__body">
             <div className="id-card__moon">
               <MoonAvatar size={132} label={agent.label} />
-              <small className="mono">credit balance not exposed by public API</small>
+              <small className="mono">credit balance is private to the owner</small>
             </div>
             <div className="id-card__fields">
               <Field label="Name" value={<EnsName name={agent.ensName} />} />
