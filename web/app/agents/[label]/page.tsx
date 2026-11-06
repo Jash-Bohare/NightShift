@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { OWNER_KEYS, REPUTATION_KEY } from "@nightshift/shared/constants";
+import { HEDERA_USDC_TOKEN_ID, OWNER_KEYS, REPUTATION_KEY } from "@nightshift/shared/constants";
 import { formatUsdc } from "@nightshift/shared/money";
 import { MoonAvatar } from "../../../components/ui/MoonAvatar";
 import {
@@ -173,7 +173,7 @@ export default function AgentPage() {
                 value={
                   agent.price.amount === null
                     ? "Not published"
-                    : `${formatUsdc(BigInt(agent.price.amount))} ${agent.price.asset} / ${agent.price.unit ?? "unit"}`
+                    : `${formatUsdc(BigInt(agent.price.amount))} ${agent.price.asset === HEDERA_USDC_TOKEN_ID ? "USDC" : agent.price.asset} / ${agent.price.unit ?? "unit"}`
                 }
                 tone="orange"
               />

@@ -585,6 +585,8 @@ textarea:focus-visible {
   font-weight: 800;
   letter-spacing: -0.05em;
   line-height: 0.96;
+  /* Long ENS names (tamil-scribe.nightshift.eth) must never widen the page on phones. */
+  overflow-wrap: anywhere;
 }
 
 .text-orange {
@@ -882,6 +884,7 @@ textarea:focus-visible {
   font-weight: 800;
   letter-spacing: -0.045em;
   line-height: 1;
+  overflow-wrap: anywhere;
 }
 
 .how-grid {
@@ -1998,8 +2001,15 @@ textarea:focus-visible {
     order: 3;
     width: 100%;
     flex: 1 0 100%;
+    flex-wrap: wrap;
     margin: 0;
     padding-bottom: 2px;
+    /* Wrap instead of a hidden-scrollbar strip so every link is visible on a phone. */
+    overflow-x: visible;
+  }
+
+  .stat-value {
+    font-size: 26px;
   }
 
   .masthead__actions {
