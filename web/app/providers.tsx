@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { sepolia } from "viem/chains";
 import { publicEnv } from "../lib/public-env";
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -26,6 +27,9 @@ export function Providers({ children }: { children: ReactNode }) {
       config={{
         loginMethods: ["email", "wallet"],
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } },
+        // Owners sign their ENS record edits on Sepolia (docs/06 edit drawer).
+        defaultChain: sepolia,
+        supportedChains: [sepolia],
       }}
     >
       {children}
