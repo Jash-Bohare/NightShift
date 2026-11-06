@@ -38,7 +38,8 @@ NightShift connects two kinds of software agents:
 | Output integrity | SHA-256 digest of the result, linked to the job record and HCS | Implemented and tested; simulated |
 | HCS evidence | A JSON log of each settled job on a Hedera Consensus Service topic | Live for the earlier message format; digest format not yet live |
 | Reputation | Job statistics written to the worker's ENS record, by the registrar only | **Live** (cron transactions on Sepolia) |
-| Settlement and payouts | Settlement recovery queue, daily payout ledger | Implemented; payouts **disabled by default** and never run live |
+| Settlement and payouts | Settlement recovery queue; daily payouts split 90% owner / 10% treasury, logged to HCS | Implemented and tested with mocks; scheduled payouts **disabled by default**; manual `pnpm -C server payday`; not yet run live |
+| Owner self-service | Launch a worker from the browser, pause/resume, daily cap, payout account, owner-signed ENS record edits | Implemented and tested; not yet run live |
 
 ---
 
@@ -105,11 +106,13 @@ Status labels:
 | 9 | Output digest | Tested · Simulated | SHA-256 of the output is stored with the job, returned to the buyer and written to HCS. It proves integrity *linkage*, not model correctness or provider attestation. |
 | 10 | HCS evidence | Tested · Live (earlier message format) | Topic `0.0.11129931`. Can be disabled with `HCS_SUBMIT_ENABLED=false`. |
 | 11 | Reputation | Tested · **Live** | Cron writes `nightshift.reputation` through the registrar. Owners cannot write that key (permission split). |
-| 12 | Settlement and payouts | Tested · Partial | Settlement recovery queue, `needs_reconciliation` state, idempotent daily payout claim (tested on Postgres). The payout transfer sender has only been tested with mocks, and payouts are disabled by default. |
-| 13 | Owner dashboard | Tested · Simulated · Partial | Privy sign-in, owner-scoped worker roster and job history (`/me`, `/me/jobs`). There are **no** owner mutation APIs (launch, pause, pricing, payout account). |
-| 14 | Buyer console | Tested · Partial | Live SSE view of a buyer run (`POST /buyer-console/run`). Disabled by default, restricted to allow-listed Privy users, and requires an explicit acknowledgement. It spends test funds when enabled. |
+| 12 | Settlement and payouts | Tested · Partial | Settlement recovery queue, `needs_reconciliation` state, idempotent daily payout claim (tested on Postgres). Each payout is one transfer: 90% to the owner's payout account, 10% to `TREASURY_ACCOUNT_ID`, then an HCS `payout` message. Scheduled payouts are off by default; `pnpm -C server payday [--through-now] --yes` runs one by hand. The transfer sender has only been tested with mocks. |
+| 13 | Owner dashboard | Tested · not yet run live | Privy sign-in; per-worker status, today's 0G spend against the cap, earnings and refusals; pause/resume and cap edit (`PATCH /me/agents/:id`); payout account (`PATCH /me`, checked on the Mirror Node); a ledger that refreshes every few seconds with HashScan, 0G request and HCS links; paydays (`/me/payouts`). |
+| 14 | Buyer console | Tested · Partial | Live SSE view of a buyer run (`POST /buyer-console/run`) with the buyer wallet's USDC balance before and after. Disabled by default, restricted to allow-listed Privy users, and requires an explicit acknowledgement. It spends test funds when enabled. |
 | 15 | Simulated local environment | Tested · Simulated | `pnpm dev:simulated`: the real server with a simulated facilitator, 0G and database, plus live read-only Sepolia. No secrets needed. |
-| — | Web launch wizard | **Not available** (blocked state) | The UI walks through the steps but cannot submit: no secure owner launch API exists yet. Workers are launched with the CLI. |
+| 16 | Web launch wizard | Tested · not yet run live | `POST /me/agents` (opt-in `OWNER_LAUNCH_ENABLED`) tests the owner's 0G key, creates the worker's Hedera account, registers the ENS name and sends the owner a little Sepolia ETH for later record edits, streaming each step with its transaction link. The owner wallet must be linked to the signed-in Privy user. Workers can also be launched with `scripts/create-agent-cli.ts`. |
+| 17 | Owner record edits | Tested · not yet run live | The owner's own wallet signs one resolver `multicall` of `setText` (price, `agent-context`, description); the server then re-reads ENS and syncs the price so quotes keep matching ENS. Nightshift never signs owner records. |
+| 18 | Name renewal | Tested | Daily at 01:00 UTC (with `CRONS_ENABLED`) the operator renews names expiring within 7 days that earned in the last 30; lapsed names are shown as expired and never listed as available. `pnpm -C server renew` lists the plan; `--yes` runs it. |
 
 ---
 
@@ -300,13 +303,13 @@ sequenceDiagram
 | ENS v2 PermissionedResolver implementation | `0x115eb53F0c60696633855F90b138178Fb40b2b2C` |
 | Hedera testnet USDC / HCS topic | `0.0.429274` / `0.0.11129931` |
 
-Read-only checks on 2026-11-06 confirmed:
+Read-only checks confirmed:
 
 - Code exists at both contract addresses.
 - `REGISTRY()` returns the UserRegistry above.
 - `paused()` is `false`.
 - 15 view calls decode with the ABI in `shared/abi/`.
-- Workers `tamil-scribe`, `kural` and `chennai-ears` are REGISTERED until **2026-12-05**. No automatic renewal exists.
+- Workers `tamil-scribe`, `kural` and `chennai-ears` are REGISTERED for the registrar's 30-day term; the renew job extends active names before they lapse.
 
 **Contract tests:** unit, fuzz, invariant and Sepolia fork suites exist under `contracts/test/` (74 test functions). **They were not executed in the latest audit.** Foundry was not installed, and the `forge-std` and nested `contracts-v2` submodule working trees are incomplete. See [Troubleshooting](#troubleshooting).
 
@@ -327,12 +330,20 @@ Base URL: `http://localhost:8787`. The full request and response schemas, error 
 | GET | `/agents/:label/payouts` | Payout history (no destination accounts) | — |
 | GET | `/jobs/latest`, `/jobs/activity` | Latest settled job; today's activity | — |
 | GET | `/stats` | Workers, jobs, USDC and 0G credits today, reconciliation counts | — |
+| GET | `/skills` | Skills with the 0G cost of one billed unit and a 4× suggested price | — |
 | GET | `/a/:label/quote?units=N` | Signed, expiring quote | — |
 | POST | `/a/:label/run` | **Paid** job: multipart `file`, `X-Nightshift-Units`, `X-Nightshift-Quote`, x402 payment | x402 |
 | GET | `/jobs/:id/status` | Job and settlement status | Per-job capability |
 | GET | `/me` | Owner and their workers | Privy |
 | GET | `/me/jobs` | Owner-scoped job history (`label`, `page`, `limit`) | Privy |
-| GET | `/buyer-console/budget` | Buyer spending rules and today's spend | Privy, allow-listed |
+| PATCH | `/me` | Set or clear the Hedera payout account | Privy |
+| POST | `/me/zg-balance` | Owner's 0G credit balance from a read-only `mk-` key (never stored) | Privy |
+| POST | `/me/agents` | Launch a worker; streams NDJSON progress. Off unless `OWNER_LAUNCH_ENABLED=true` | Privy + linked wallet |
+| PATCH | `/me/agents/:id` | Pause/resume, daily 0G cap | Privy |
+| POST | `/me/agents/:id/records/draft` | Exact ENS record values for an owner-signed edit | Privy |
+| POST | `/me/agents/:id/records/sync` | Re-read ENS after the owner's transaction and sync the price | Privy |
+| GET | `/me/payouts` | The owner's payouts | Privy |
+| GET | `/buyer-console/budget` | Buyer spending rules, today's spend and the buyer wallet's USDC balance | Privy, allow-listed |
 | GET | `/buyer-console/events/:runId` | Persisted buyer-run events | Privy, allow-listed |
 | POST | `/buyer-console/run?skill=` | Runs the buyer once and streams SSE. **Spends test funds; disabled by default.** | Privy, allow-listed |
 
@@ -345,7 +356,7 @@ curl "localhost:8787/a/tamil-scribe/quote?units=2"          # {"amount":"60000",
 curl -i localhost:8787/me                                   # HTTP 401 {"error":"unauthorized",…}
 ```
 
-Money is always an integer string: USDC atomic units (6 decimals, so `60000` = 0.06 USDC) and 0G costs in micro-USD. There are no owner mutation endpoints (launch, pause, pricing, payout account); workers are launched with `scripts/create-agent-cli.ts`.
+Money is always an integer string: USDC atomic units (6 decimals, so `60000` = 0.06 USDC) and 0G costs in micro-USD. Owner endpoints take the owner only from the verified Privy token and match every worker id against it.
 
 ---
 
@@ -407,19 +418,21 @@ For anything else, copy [`.env.example`](.env.example) to `.env` at the reposito
 | `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, optional `PRIVY_JWT_VERIFICATION_KEY` | server | for `/me` and the console | secret: **yes** | live or simulated (optional) |
 | `BUYER_CONSOLE_ENABLED`, `BUYER_CONSOLE_ALLOWED_PRIVY_USER_IDS` | server | optional (default off) | no | live |
 | `CRONS_ENABLED`, `PAYOUTS_ENABLED`, `HCS_SUBMIT_ENABLED`, `NIGHTSHIFT_SIMULATION` | server | optional (safe defaults) | no | both |
+| `OWNER_LAUNCH_ENABLED`, `OWNER_MAX_AGENTS`, `SEPOLIA_DRIP_WEI` | server | optional (launch off; 3 workers per owner; 0.003 ETH owner drip, 0 disables) | no | live |
 | `TRUST_PROXY_HOPS`, `UPLOAD_MAX_PER_MINUTE`, `UPLOAD_MAX_CONCURRENT_PER_CLIENT`, `UPLOAD_MAX_CONCURRENT_TOTAL`, `WORKER_REQUESTS_PER_MINUTE` | server | optional | no | both |
 | `BUYER_SERVER_URL`, `BUYER_HEDERA_ACCOUNT_ID` | buyer | for real buyer runs | no | live |
 | `BUYER_HEDERA_PRIVATE_KEY` | buyer | for real buyer runs | **yes** | live |
-| `NEXT_PUBLIC_SERVER_URL`, `NEXT_PUBLIC_PRIVY_APP_ID`, `NEXT_PUBLIC_SEPOLIA_RPC_URL`, `NEXT_PUBLIC_ENS_PARENT_NAME`, `NEXT_PUBLIC_NIGHTSHIFT_REGISTRAR_ADDRESS`, `NEXT_PUBLIC_HEDERA_HCS_TOPIC_ID` | web (`web/.env.local`) | server URL defaults to `http://localhost:8787` | no (public) | both |
-| `DEPLOYER_PRIVATE_KEY`, `ETHERSCAN_API_KEY`, `ENS_*`, `SMOKE_*`, `SEPOLIA_DRIP_WEI` | contract scripts | deploy and smoke only | keys: **yes** | live |
+| `NEXT_PUBLIC_SERVER_URL`, `NEXT_PUBLIC_PRIVY_APP_ID`, `NEXT_PUBLIC_SEPOLIA_RPC_URL`, `NEXT_PUBLIC_ENS_PARENT_NAME`, `NEXT_PUBLIC_NIGHTSHIFT_REGISTRAR_ADDRESS`, `NEXT_PUBLIC_HEDERA_HCS_TOPIC_ID`, `NEXT_PUBLIC_DEMO_MODE` (hosted build: hides sign-in, launch, dashboard and paid runs) | web (`web/.env.local`) | server URL defaults to `http://localhost:8787` | no (public) | both |
+| `DEPLOYER_PRIVATE_KEY`, `ETHERSCAN_API_KEY`, `ENS_*`, `SMOKE_*` | contract scripts | deploy and smoke only | keys: **yes** | live |
 | `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `SUPABASE_ACCESS_TOKEN` | Supabase CLI | migrations only | **yes** | live |
 | `BUYER_ZG_SK_KEY`, `ZG_TESTNET_*`, `HEDERA_NETWORK`, `TREASURY_PRIVATE_KEY`, `SPIKE_*` | spikes and experiments | no | keys: **yes** | — |
 
-**Safety defaults.** Crons, payouts and the paid console are **off** unless explicitly enabled. The server refuses to start in these cases:
+**Safety defaults.** Crons, payouts, owner launch and the paid console are **off** unless explicitly enabled. The server refuses to start in these cases:
 
 - `PAYOUTS_ENABLED=true` without `CRONS_ENABLED=true`.
 - Simulation mode in production.
-- Simulation mode with non-loopback payment or 0G URLs.
+- Simulation mode with non-loopback payment or 0G URLs, or with HCS, crons, payouts, owner launch or the paid console enabled.
+- `OWNER_LAUNCH_ENABLED=true` without Privy credentials.
 
 A configuration error lists variable **names**, never values.
 
@@ -450,7 +463,7 @@ pnpm simulate:buyer
 
 - The stack forces its configuration, overriding any `.env` file.
 - It uses fresh dummy keys and a loopback-only facilitator and 0G endpoint, both enforced by config.
-- HCS, crons, payouts and the paid console are all off.
+- HCS, crons, payouts, owner launch and the paid console are all off.
 - The buyer's simulated payment scheme never signs a Hedera transaction.
 - Settlement ids look like `SIMULATED-NOT-A-HEDERA-TX-1`, and no HashScan link is shown for them.
 
@@ -478,24 +491,24 @@ pnpm -C server test:db              # migrations and RLS on embedded Postgres
 pnpm -C contracts test:unit         # Foundry (needs forge + restored submodules)
 ```
 
-Latest recorded run (2026-11-06, [`FINAL_TEST_RESULTS.md`](FINAL_TEST_RESULTS.md)):
+Latest recorded run:
 
 | Suite | Result |
 |---|---|
 | Buyer | 48 tests |
-| Server | 140 tests |
-| Web | 25 tests |
+| Server | 188 tests |
+| Web | 40 tests |
 | Typecheck, lint, web build | pass |
 | `pnpm format:check` | fails on pre-existing unformatted files |
 
 | Kind | What it covers | Where |
 |---|---|---|
 | Unit | Pricing, quote signing, budget logic, 0G billing adapter, buyer decisions, spending rules, cron gating, config safety, rate limits, web formatting and parsers | `*/src/**/*.test.ts`, `web/lib/*.test.ts` |
-| Integration (in-process HTTP) | Routes with mocked dependencies: jobs, me, payouts, buyer console, directory | `server/src/routes/*.test.ts` |
+| Integration (in-process HTTP) | Routes with mocked dependencies: jobs, me, owner controls, owner launch, record edits, skills, payouts, buyer console, directory | `server/src/routes/*.test.ts` |
 | Simulated end-to-end (16) | Real app, x402 middleware and buyer against a local facilitator and simulated 0G, DB and chain. Covers the happy path, refusal fallback, paused-worker lifecycle, expired or revoked workers, bad quotes, replay, concurrent duplicates, uncertain and definite settlement failures, missing billing, owner isolation with real ES256 token checks, and API contracts for each page | `server/src/e2e/` |
 | Database (10) | Migrations 0001–0006 on Postgres (PGlite), RLS as anon, authenticated and service_role, RPC grants, reservation TTL, payout idempotency, and the pre-0005 exposure | `server/src/db/migrations.test.ts` |
 | Contract | Unit, fuzz, invariant and fork tests | `contracts/test/` (**not run in the latest audit**) |
-| Live testnet | Read-only Sepolia and Mirror Node checks; historical paid runs | [`PROOFS.md`](PROOFS.md), [`FINAL_TEST_RESULTS.md`](FINAL_TEST_RESULTS.md) |
+| Live testnet | Read-only Sepolia and Mirror Node checks; historical paid runs | [`PROOFS.md`](PROOFS.md) |
 
 **What the tests do not prove:**
 
@@ -543,20 +556,20 @@ Real paid runs (`scripts/pay-run.ts`, `pnpm -C buyer start`, the paid console) s
 | Budget | Atomic Postgres reservations. Normal reservations expire after 15 min; uncertain-billing reservations are retained until reconciled. |
 | Payment verification | The payment must match the quote's pay-to, amount, asset and network on both server and buyer. The buyer checks the transfer on the Mirror Node and does not trust an HTTP 200. |
 | Uncertain outcomes | Unknown settlement or 0G billing becomes `needs_reconciliation`. The buyer keeps a run lock and never retries. Payouts in doubt become `uncertain` and are never resent. |
-| Owner authorization | Identity comes only from a verified Privy token (signature, issuer, audience, expiry). Ownership is enforced in the database query. Private fields (outputs, buyer accounts, errors, payout destinations) are never returned. |
-| Database | RLS on every table. After migration 0005, anon and authenticated roles cannot read jobs, payouts, workers, buyer events or secrets (tested on Postgres). Per-worker keys are AES-256-GCM encrypted. |
+| Owner authorization | Identity comes only from a verified Privy token (signature, issuer, audience, expiry). Ownership is enforced in the database query. A launch's ENS owner must be a wallet linked to that Privy user (checked server-side). Status changes are compare-and-set; an owner can pause but never override the budget guard. Outputs, buyer accounts and internal errors are never returned. |
+| Database | RLS on every table. Since migration 0005, anon and authenticated roles cannot read jobs, payouts, workers, buyer events or secrets (tested on Postgres and checked against the hosted project with the anon key). Per-worker keys are AES-256-GCM encrypted. |
 | Rate limiting | Per-client limits per endpoint group, upload size and concurrency limits, and a 15 s health cache |
 | Cron controls | `CRONS_ENABLED` defaults to off; payouts need both flags |
 | Secrets | Server-only service-role, operator, quote-signing and master keys. Nothing secret is placed in `web/`. Config errors never echo values. |
 
 **Known limitations:**
 
-- **Migration 0005 must be applied** to any existing database. Until then, the 0001/0003 policies let the public anon key read jobs, payouts and buyer events, which include transcripts. Applying it to the shared project is pending owner authorization.
 - Rate limits are per process, not shared across instances.
 - The paid buyer console runs in the server process, so the server must hold the buyer's key while it is enabled.
 - The output digest proves integrity linkage, not model correctness or TEE attestation.
 - The quote verification key is distributed out of band; it is not anchored in ENS.
 - The payout transfer sender has only been exercised with mocks.
+- Launches run one at a time per server process (they share the operator key).
 
 ---
 
@@ -565,11 +578,10 @@ Real paid runs (`scripts/pay-run.ts`, `pnpm -C buyer start`, the paid console) s
 | Category | Items |
 |---|---|
 | **Live verified** (testnet) | Registrar and UserRegistry deployed on Sepolia; 3 workers registered; ENS records and reputation writes; HCS topic with job messages; historical x402 USDC payments and 0G Whisper jobs **on earlier code** ([`PROOFS.md`](PROOFS.md)) |
-| **Implemented, simulated and tested** | Signed quotes, replay protection, paused-worker lifecycle, budget reservations, x402 hooks, 0G billing adapter, digest, job-status capability, settlement classification and recovery, owner APIs, buyer verification, cron gating, rate limits, migrations and RLS on Postgres |
-| **Pending integration** | Applying migrations 0004–0006 to a hosted database; a dedicated staging environment; one approved live paid run on the current code (including real 0G billing fields and HCS digest); Foundry test run; agent renewal before 2026-12-05 |
-| **Not available** | Owner launch, pause, pricing and payout-account APIs (web launch is a blocked state); hosted deployment; multi-instance rate limiting; production release |
-
-Detailed evidence and go/no-go decisions are in [`FINAL_PROJECT_AUDIT.md`](FINAL_PROJECT_AUDIT.md). Prioritized tasks are in [`REMAINING_WORK.md`](REMAINING_WORK.md).
+| **Implemented, simulated and tested** | Signed quotes, replay protection, paused-worker lifecycle, budget reservations, x402 hooks, 0G billing adapter, digest, job-status capability, settlement classification and recovery, owner launch, controls and record edits, 90/10 payouts with HCS log, name renewal, buyer verification, cron gating, rate limits, migrations and RLS on Postgres |
+| **Applied** | Migrations 0001–0006 on the hosted Supabase project |
+| **Pending integration** | One live paid run, owner launch, record edit and payout on the current code (including real 0G billing fields and HCS digest); Foundry test run |
+| **Not available** | Hosted deployment; multi-instance rate limiting; production release |
 
 ---
 
@@ -581,7 +593,7 @@ Detailed evidence and go/no-go decisions are in [`FINAL_PROJECT_AUDIT.md`](FINAL
 4. **Foundry contract testing:** restore submodules and run the unit, fuzz, invariant and fork suites.
 5. **Hosted worker endpoint:** a public server URL, and the owner updates the workers' `agent-endpoint[x402]` ENS records (currently `localhost:8787`).
 6. **Controlled end-to-end testnet demo:** a rehearsed live run with HCS digest evidence; renew worker names.
-7. **Production preparation:** owner mutation APIs, a shared rate limiter, a separate buyer-console service, payout validation and security review.
+7. **Production preparation:** a shared rate limiter, a separate buyer-console service, launch queueing across instances and a security review.
 
 ---
 
@@ -622,12 +634,6 @@ Detailed evidence and go/no-go decisions are in [`FINAL_PROJECT_AUDIT.md`](FINAL
 |---|---|
 | [`BACKEND_API_CONTRACT.md`](BACKEND_API_CONTRACT.md) | Every endpoint: auth, parameters, responses, errors, rate limits, configuration |
 | [`STAGING_SETUP.md`](STAGING_SETUP.md) | Environment matrix, simulated stack, staging database, test commands, reconciliation runbook |
-| [`TEAMMATE_INTEGRATION_TESTING_GUIDE.md`](TEAMMATE_INTEGRATION_TESTING_GUIDE.md) | Step-by-step frontend and backend QA on the simulated stack |
-| [`TEAMMATE_TESTING_GUIDE.md`](TEAMMATE_TESTING_GUIDE.md) | UI QA, safety rules, bug template |
-| [`FINAL_PROJECT_AUDIT.md`](FINAL_PROJECT_AUDIT.md) | Feature evidence matrix, security status, go/no-go decisions |
-| [`FINAL_TEST_RESULTS.md`](FINAL_TEST_RESULTS.md) | Exact commands, counts, live read-only checks |
-| [`REMAINING_WORK.md`](REMAINING_WORK.md) | Prioritized remaining tasks with completion criteria |
-| [`RELEASE.md`](RELEASE.md) | Release and operations guide (written before migration 0006 and the simulated stack) |
 | [`PROOFS.md`](PROOFS.md) | On-chain and API artifacts from earlier live runs |
 | [`FEEDBACK.md`](FEEDBACK.md) | Sponsor developer-experience notes |
 | [`buyer/README.md`](buyer/README.md) | Buyer verification boundaries and configuration |

@@ -1,6 +1,6 @@
 # NightShift Backend API Contract
 
-**Source of truth:** `server/src/app.ts` (route order) and `server/src/routes/*.ts`. Last verified on 2026-11-06 by the automated suite (`server/src/e2e/simulated-flow.test.ts`, "frontend ↔ backend API contracts") and by live HTTP probes against the simulated stack.
+**Source of truth:** `server/src/app.ts` (route order) and `server/src/routes/*.ts`. Verified by the automated suite (`server/src/e2e/simulated-flow.test.ts` "frontend ↔ backend API contracts", and the route tests in `server/src/routes/*.test.ts`) and by live HTTP probes.
 
 ## Conventions
 
@@ -39,6 +39,7 @@
 | GET | `/jobs/latest` | — | `PublicJob` or `null` | — |
 | GET | `/jobs/activity` | `limit` ≤1000 | `{jobs:[{status, created_at, agents:{label}}]}` (today, UTC) | 422 |
 | GET | `/stats` | — | `{agents, workers:{active, paused, unavailable}, jobsToday, failedJobsToday, settlementFailuresToday, reconciliationRequiredToday, payouts:{pending, failed, uncertain}, usdcToday, creditsUsedToday \| null}`. `creditsUsedToday` is `null` when any billing record is incomplete | — |
+| GET | `/skills` | — | `{skills:[{id, model, unit, costUsdMicroPerUnit, suggestedPriceAtomic}]}`: 0G cost of one billed unit (Whisper: 60 s × `pricing_usd.prompt` from `/v1/models`, cached 1 h) and 4× that as the suggested price | 5xx if 0G pricing is unavailable |
 | GET | `/a/:label/quote` | `units` (1–10000, rounded up) | `{amount, asset, network, payTo, unit, units, status, issuedAt, expiresAt (120 s), nonce, signedQuote}` | 404, 409 (no pay-to / not runnable), 422 |
 
 `DirectoryAgent` is `{label, ensName, owner, resolver, skill, price:{amount, asset, unit}, payTo, endpoint, model, description, reputation, status, expiry, updatedAt}`.
@@ -83,15 +84,22 @@ Job statuses are `running`, `done`, `settled`, `failed_upstream`, `failed_intern
 
 | Method | Path | Auth | Request | 200 response | Errors |
 |---|---|---|---|---|---|
-| GET | `/me` | Privy | — | `{owner:{evmAddress, createdAt} \| null, agents:[{id, label, ensName, skill, model, priceAtomic, priceUnit, dailyCapUsdMicro, status, expiry, createdAt}]}` (registration status = `status` + `expiry`) | 401; 503 if Privy is not configured |
-| GET | `/me/jobs` | Privy | `label?`, `page` ≤1000, `limit` ≤100 | `{items:[{id, label, status, units, priceAtomic, zgCostUsdMicro, hederaTxId, hcsSequence, outputSha256, latencyMs, createdAt}], page, limit, nextPage?}`. Ownership is enforced in the query (`agents.owner_id`). Outputs, buyer accounts and error text are never returned. | 401, 422, 503 |
-| GET | `/buyer-console/budget` | Privy, allow-listed | — | `{rules, state}` | 401, 403, 503 |
+| GET | `/me` | Privy | — | `{owner:{evmAddress, hederaPayoutAccount, createdAt} \| null, agents:[{id, label, ensName, skill, model, priceAtomic, priceUnit, dailyCapUsdMicro, status, expiry, createdAt, hederaAccountId, resolverAddress, registerTx, today:{spentUsdMicro, earnedAtomic, jobsSettled, jobsRefused}}]}`. `today` is the current UTC day; 0G spend counts every job's recorded cost, earnings only settled jobs | 401; 503 if Privy is not configured |
+| PATCH | `/me` | Privy | `{hederaPayoutAccount: "0.0.x" \| null}` | `{hederaPayoutAccount}`. The account must exist on the Mirror Node, not be deleted, and hold a USDC association or unlimited auto-association | 401, 404 (no owner yet), 422 |
+| POST | `/me/zg-balance` | Privy | `{zgMgmtKey: "mk-…"}` | `{creditBalanceUsdMicro, totalBalanceUsdMicro}` from 0G `GET /v1/account/balance`. The key is used once; never stored or logged | 401, 422 (`invalid_input`, `invalid_zg_key`) |
+| POST | `/me/agents` | Privy + linked wallet | `{label, skill, priceAtomic, dailyCapUsdMicro, zgApiKey: "sk-…", zgMgmtKey?, hederaPayoutAccount?, description?, ownerAddress}`; price ≤ 10 USDC, cap ≤ $1,000 | **NDJSON** (`application/x-ndjson`): `{"type":"progress","step":"validate\|zg_key\|hedera_account\|ens_register\|drip","status":"running\|done\|sent\|skipped\|failed", txHash?, account?, reason?, message?}` lines, then one `{"type":"done","result":{agentId, ensName, registerTx, hederaAccount, resolver}}` or `{"type":"error", error, message}`. A disconnect does not abort the launch | Before the stream: 401; 503 `feature_disabled` unless `OWNER_LAUNCH_ENABLED=true`; 403 (`ownerAddress` is not a wallet linked to the Privy user); 409 `invalid_state` (`OWNER_MAX_AGENTS` reached); 422; 429 (another launch in progress) |
+| PATCH | `/me/agents/:id` | Privy | `{status?: "active" \| "paused_owner", dailyCapUsdMicro?}` (cap 1…1,000,000,000 micro-USD) | `{id, label, status, dailyCapUsdMicro}`. Pause from `active`/`paused_budget`; resume only from `paused_owner`; compare-and-set | 401, 404 (not this owner's), 409 `invalid_state`, 422 |
+| POST | `/me/agents/:id/records/draft` | Privy | `{priceAtomic?, description?}` | `{ensName, dnsName, resolver, signer, records:[{key, value}]}`: the exact values for the owner's wallet to sign (a price edit rewrites `nightshift.price` and `agent-context`) | 401, 404, 409, 422 |
+| POST | `/me/agents/:id/records/sync` | Privy | — | `{priceAtomic, description, directorySynced}` after re-reading ENS; the price record must name USDC on `hedera:testnet` with the worker's unit, through the registered resolver | 401, 404, 409, 5xx (ENS read failed) |
+| GET | `/me/payouts` | Privy | `page` ≤1000, `limit` ≤100 | `{items:[{id, label, payoutDate, grossAtomic, ownerAtomic, feeAtomic, status, transactionId, destinationAccount, createdAt}], page, limit, nextPage?}` | 401, 422 |
+| GET | `/me/jobs` | Privy | `label?`, `page` ≤1000, `limit` ≤100 | `{items:[{id, label, status, units, priceAtomic, zgCostUsdMicro, hederaTxId, zgRequestId, hcsSequence, outputSha256, latencyMs, createdAt}], page, limit, nextPage?}`. Ownership is enforced in the query (`agents.owner_id`). Outputs, buyer accounts and error text are never returned. | 401, 422, 503 |
+| GET | `/buyer-console/budget` | Privy, allow-listed | — | `{rules, state, wallet: {accountId, usdcAtomic \| null, error?} \| null}`; the balance is read from the Mirror Node and reported as unavailable rather than hidden | 401, 403, 503 |
 | GET | `/buyer-console/events/:runId` | Privy, allow-listed | `runId` = `run-<digits>` | `{events:[{event_type, payload, created_at}]}` (allow-listed fields per event kind) | 401, 403, 422 |
 | POST | `/buyer-console/run` | Privy, allow-listed | `skill` (e.g. `transcribe:ta`) | SSE stream of buyer events, then `complete`. **Spends test funds.** | 503 `feature_disabled` unless `BUYER_CONSOLE_ENABLED=true`; 401, 403, 422, 429 |
 
 ## Operational (no HTTP surface by design)
 
-Settlement recovery, reputation, the indexer and payouts run as scheduled jobs (`server/src/cron/*`). They only run when `CRONS_ENABLED=true`, and payouts additionally need `PAYOUTS_ENABLED=true`. Their state is visible through the following:
+Settlement recovery, reputation, the indexer, name renewal (01:00 UTC) and payouts (00:15 UTC) run as scheduled jobs (`server/src/cron/*`). They only run when `CRONS_ENABLED=true`, and payouts additionally need `PAYOUTS_ENABLED=true`. Operators can run payouts (`pnpm -C server payday [--through-now] --yes`) and renewals (`pnpm -C server renew --yes`) by hand; without `--yes` both only print the plan. Their state is visible through the following:
 
 - **`/stats`:** `settlementFailuresToday`, `reconciliationRequiredToday` and payout counts.
 - **`/agents/:label/payouts`:** payout batch status per agent.
@@ -103,7 +111,6 @@ There is no operator HTTP API. Reconciliation is done in the database by an oper
 
 | Gap | Current behaviour |
 |---|---|
-| Owner launch / pause / resume / pricing / payout-account endpoints | No `POST` owner routes. The web launch wizard shows a blocked state. |
 | Shared (multi-instance) rate limiting | Limits are per process only. |
 
 ## Required configuration per surface
@@ -112,6 +119,7 @@ There is no operator HTTP API. Reconciliation is done in the database by an oper
 |---|---|
 | Every server start | `PUBLIC_SERVER_URL`, `PUBLIC_WEB_URL`, `WEB_ORIGIN`, `SECRETS_MASTER_KEY`, `NIGHTSHIFT_QUOTE_SIGNING_PRIVATE_KEY`, `NIGHTSHIFT_QUOTE_VERIFY_PUBLIC_KEY`, `ZG_ROUTER_URL`, `ZG_TEAM_SK_KEY`, `ZG_WHISPER_MODEL`, `ZG_CHAT_MODEL`, `HEDERA_OPERATOR_ID`, `HEDERA_OPERATOR_KEY`, `HEDERA_USDC_TOKEN_ID`, `HEDERA_HCS_TOPIC_ID`, `HEDERA_MIRROR_URL`, `TREASURY_ACCOUNT_ID`, `X402_FACILITATOR_URL`, `SEPOLIA_RPC_URL`, `ENS_OPERATOR_PRIVATE_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | Privy routes | `PRIVY_APP_ID`, `PRIVY_APP_SECRET` (optionally `PRIVY_JWT_VERIFICATION_KEY`) |
+| Owner launch | the Privy routes' variables plus `OWNER_LAUNCH_ENABLED=true`; optional `OWNER_MAX_AGENTS` (3), `SEPOLIA_DRIP_WEI` (0.003 ETH, 0 disables) |
 | Paid console | the Privy routes' variables plus `BUYER_CONSOLE_ENABLED=true`, `BUYER_CONSOLE_ALLOWED_PRIVY_USER_IDS`, `BUYER_HEDERA_ACCOUNT_ID`, `BUYER_HEDERA_PRIVATE_KEY`, `BUYER_SERVER_URL` |
 | Scheduled jobs | `CRONS_ENABLED=true` (and `PAYOUTS_ENABLED=true` for payouts) |
 | Simulated local stack | none; `pnpm -C server dev:simulated` forces safe values (see `STAGING_SETUP.md`) |
