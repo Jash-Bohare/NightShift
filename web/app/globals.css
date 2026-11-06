@@ -2447,6 +2447,9 @@ textarea:focus-visible {
 .dash-payday {
   margin: 8px 0 0;
 }
+.dash-credits {
+  margin: 4px 0 0;
+}
 .dash-agent__actions {
   display: flex;
   flex-wrap: wrap;

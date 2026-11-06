@@ -15,6 +15,7 @@ import { meAgentsRouter } from "./routes/meAgents.js";
 import { meLaunchRouter } from "./routes/meLaunch.js";
 import { skillsRouter } from "./routes/skills.js";
 import { capabilitiesRouter } from "./routes/capabilities.js";
+import { meCreditsRouter } from "./routes/meCredits.js";
 import { publicRouter } from "./routes/public.js";
 import { payoutsRouter } from "./routes/payouts.js";
 import { runHandler, runPrecheck } from "./routes/run.js";
@@ -52,6 +53,7 @@ export function createApp(): express.Express {
   app.use(publicRouter);
   app.use(skillsRouter);
   app.use(capabilitiesRouter);
+  app.use(meCreditsRouter);
   app.use(directoryRouter);
   app.use(payoutsRouter);
   app.use(jobsRouter);

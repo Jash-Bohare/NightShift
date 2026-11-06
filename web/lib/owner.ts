@@ -282,3 +282,48 @@ export function payoutStatusLabel(status: OwnerPayout["status"]): string {
       return "Needs reconciliation (outcome unknown)";
   }
 }
+
+// ---- GET /me/zg-credits ---------------------------------------------------------------------
+
+export type ZgCreditAccount =
+  | {
+      address: string | null;
+      creditBalanceUsdMicro: string;
+      totalBalanceUsdMicro: string;
+      workers: string[];
+    }
+  | { workers: string[]; error: string };
+
+export function parseZgCredits(value: unknown): { accounts: ZgCreditAccount[]; readAt: string } {
+  const bad = () => new Error("The 0G credit response is malformed.");
+  if (typeof value !== "object" || value === null) throw bad();
+  const v = value as Record<string, unknown>;
+  if (!Array.isArray(v.accounts) || !isString(v.readAt)) throw bad();
+  const accounts = v.accounts.map((raw: unknown): ZgCreditAccount => {
+    const a = raw as Record<string, unknown>;
+    if (typeof a !== "object" || a === null || !Array.isArray(a.workers)) throw bad();
+    if (!a.workers.every(isString)) throw bad();
+    if (isString(a.error)) return { workers: a.workers as string[], error: a.error };
+    if (
+      !isString(a.creditBalanceUsdMicro) ||
+      !DIGITS.test(a.creditBalanceUsdMicro) ||
+      !isString(a.totalBalanceUsdMicro) ||
+      !DIGITS.test(a.totalBalanceUsdMicro) ||
+      !nullable(a.address, isString)
+    )
+      throw bad();
+    return {
+      address: (a.address as string | null) ?? null,
+      creditBalanceUsdMicro: a.creditBalanceUsdMicro,
+      totalBalanceUsdMicro: a.totalBalanceUsdMicro,
+      workers: a.workers as string[],
+    };
+  });
+  return { accounts, readAt: v.readAt };
+}
+
+/** Credits spent since a first reading (never negative: a top-up is not shown as spending). */
+export function creditsSpentSince(firstUsdMicro: string, nowUsdMicro: string): string {
+  const spent = BigInt(firstUsdMicro) - BigInt(nowUsdMicro);
+  return (spent > 0n ? spent : 0n).toString();
+}

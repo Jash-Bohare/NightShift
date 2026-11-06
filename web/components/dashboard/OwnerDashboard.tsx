@@ -24,10 +24,12 @@ import { atomicFromDecimal, decimalFromAtomic } from "../../lib/launch";
 import {
   agentStatusStamp,
   capUsedPercent,
+  creditsSpentSince,
   formatUsdMicro,
   ownerJobStatusLabel,
   parseOwnerJobs,
   parseOwnerPayouts,
+  parseZgCredits,
   payoutStatusLabel,
   type OwnerAgent,
   type OwnerDashboard,
@@ -58,6 +60,53 @@ function PaydayLine() {
   );
 }
 
+/**
+ * The owner's live 0G credit balance, read server-side with the stored read-only mk- keys.
+ * The first reading on this page is the baseline, so a paid run shows the balance going down.
+ */
+function ZgCredits({ getToken }: { getToken: TokenFn }) {
+  const credits = useQuery({
+    queryKey: ["owner-zg-credits"],
+    queryFn: async ({ signal }) =>
+      parseZgCredits(await serverGet<unknown>("/me/zg-credits", signal, await token(getToken))),
+    refetchInterval: 15_000,
+  });
+  const firstSeen = useRef(new Map<string, string>());
+  if (credits.isPending)
+    return <p className="mono small-note dash-credits">0G credits left: reading…</p>;
+  if (credits.isError)
+    return <p className="mono small-note dash-credits">0G credits left: unavailable right now</p>;
+  return (
+    <>
+      {credits.data.accounts.map((account) => {
+        const id = account.workers.join(",");
+        const label = credits.data.accounts.length > 1 ? ` (${account.workers.join(", ")})` : "";
+        if ("error" in account)
+          return (
+            <p className="mono small-note dash-credits" key={id}>
+              0G credits left{label}: unavailable right now
+            </p>
+          );
+        const first = firstSeen.current.get(id) ?? account.creditBalanceUsdMicro;
+        if (!firstSeen.current.has(id)) firstSeen.current.set(id, first);
+        const spent = creditsSpentSince(first, account.creditBalanceUsdMicro);
+        return (
+          <p className="mono small-note dash-credits" key={id}>
+            0G credits left{label}:{" "}
+            <b className="tnum">${formatUsdMicro(account.creditBalanceUsdMicro)}</b>
+            {spent !== "0" && (
+              <span className="text-orange">
+                {" "}
+                · ↓ ${formatUsdMicro(spent)} since you opened this page
+              </span>
+            )}
+          </p>
+        );
+      })}
+    </>
+  );
+}
+
 export function Dashboard({ data, getToken }: { data: OwnerDashboard; getToken: TokenFn }) {
   const earned = data.agents.reduce((s, a) => s + BigInt(a.today.earnedAtomic), 0n);
   const spent = data.agents.reduce((s, a) => s + BigInt(a.today.spentUsdMicro), 0n);
@@ -83,6 +132,7 @@ export function Dashboard({ data, getToken }: { data: OwnerDashboard; getToken: 
               : ""}
           </p>
           <PaydayLine />
+          {data.agents.length > 0 && <ZgCredits getToken={getToken} />}
           <PayoutAccount owner={data.owner!} getToken={getToken} />
         </div>
       </section>

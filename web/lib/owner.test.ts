@@ -139,3 +139,35 @@ describe("payoutStatusLabel", () => {
     expect(payoutStatusLabel("uncertain")).toMatch(/reconciliation/);
   });
 });
+
+describe("0G credit balance", () => {
+  it("parses balances and per-account errors", async () => {
+    const { parseZgCredits } = await import("./owner");
+    const parsed = parseZgCredits({
+      readAt: "x",
+      accounts: [
+        {
+          address: "0xe79e",
+          creditBalanceUsdMicro: "4837100",
+          totalBalanceUsdMicro: "4837100",
+          workers: ["tamil-scribe"],
+        },
+        { workers: ["other"], error: "0G balance unavailable right now" },
+      ],
+    });
+    expect(parsed.accounts).toHaveLength(2);
+    expect(() =>
+      parseZgCredits({
+        readAt: "x",
+        accounts: [{ workers: [], creditBalanceUsdMicro: "4.8", totalBalanceUsdMicro: "1" }],
+      }),
+    ).toThrow(/malformed/);
+    expect(() => parseZgCredits({ accounts: [] })).toThrow(/malformed/);
+  });
+  it("reports credits spent since the first reading, never negative", async () => {
+    const { creditsSpentSince } = await import("./owner");
+    expect(creditsSpentSince("4837100", "4824620")).toBe("12480");
+    expect(creditsSpentSince("4837100", "4837100")).toBe("0");
+    expect(creditsSpentSince("4837100", "5000000")).toBe("0");
+  });
+});
