@@ -29,6 +29,11 @@ const skillNames: Record<(typeof SKILL_IDS)[number], string> = {
   "transcribe:en": "Transcribe · English",
 };
 
+/** Why the buyer budget is hidden: sign in locally, or (hosted demo) where to see paid runs. */
+const privateBudgetDetail = publicEnv.demoMode
+  ? "Paid buyer runs happen on the local console and are shown in the demo video; every settled payment is linked on HashScan from the worker pages."
+  : "Sign in with an allow-listed Privy account to view spending rules and run events.";
+
 export default function ConsolePage() {
   // Hosted demo: Privy sign-in only works on localhost, so paid runs stay local-only.
   if (!publicEnv.privyAppId || publicEnv.demoMode) return <ConsolePageContent auth={null} />;
@@ -310,7 +315,9 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
                   ? "Start new paid run"
                   : auth?.authenticated
                     ? "▶ Run buyer agent"
-                    : "Sign in to run buyer"}
+                    : publicEnv.demoMode
+                      ? "Runs on the local demo"
+                      : "Sign in to run buyer"}
         </Button>
         {publicEnv.demoMode ? (
           <p role="status" className="mono control-disclaimer">
@@ -342,10 +349,7 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
       </div>
 
       {!auth?.authenticated ? (
-        <EmptyPanel
-          title="Buyer budget is private."
-          detail="Sign in with an allow-listed Privy account to view spending rules and run events."
-        />
+        <EmptyPanel title="Buyer budget is private." detail={privateBudgetDetail} />
       ) : budget.isPending ? (
         <LoadingPanel label="Reading buyer spending rules…" />
       ) : budget.isError ? (
@@ -504,10 +508,7 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
         <aside className="note-card">
           <h2>House rules</h2>
           {!auth?.authenticated ? (
-            <EmptyPanel
-              title="Buyer budget is private."
-              detail="Sign in with an allow-listed Privy account to view spending rules and run events."
-            />
+            <EmptyPanel title="Buyer budget is private." detail={privateBudgetDetail} />
           ) : budget.isPending ? (
             <LoadingPanel label="Loading rules…" />
           ) : budget.isError ? (
