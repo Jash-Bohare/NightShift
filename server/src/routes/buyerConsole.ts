@@ -10,6 +10,7 @@ import { env } from "../config.js";
 import { ApiError, UpstreamError } from "../errors.js";
 import { log, logError } from "../log.js";
 import { authorizeBuyerConsole } from "../buyer-console-auth.js";
+import { usdcBalance } from "../hedera/mirror.js";
 
 export const buyerConsoleRouter = Router();
 
@@ -187,7 +188,19 @@ function safeRunEvent(kind: string, raw: unknown, runId: string): Record<string,
 buyerConsoleRouter.get("/buyer-console/budget", async (req, res) => {
   await authorizeBuyerConsole(req.header("authorization"));
   res.setHeader("Cache-Control", "no-store");
-  res.json({ rules: loadRules(), state: loadState() });
+  // The buyer wallet balance is public on the mirror node; a lookup failure is reported, not
+  // hidden, and never blocks the rules/spend view.
+  const accountId = process.env.BUYER_HEDERA_ACCOUNT_ID;
+  let wallet: { accountId: string; usdcAtomic: string | null; error?: string } | null = null;
+  if (accountId && /^0\.0\.\d+$/.test(accountId)) {
+    try {
+      wallet = { accountId, usdcAtomic: (await usdcBalance(accountId)).toString() };
+    } catch (error) {
+      logError("hedera", "buyer wallet balance", error);
+      wallet = { accountId, usdcAtomic: null, error: "mirror node unavailable" };
+    }
+  }
+  res.json({ rules: loadRules(), state: loadState(), wallet });
 });
 
 buyerConsoleRouter.get("/buyer-console/events/:runId", async (req, res) => {

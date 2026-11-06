@@ -19,7 +19,7 @@ import {
 } from "../../lib/console";
 import { formatElapsed } from "../../lib/time";
 import { publicEnv } from "../../lib/public-env";
-import { hashscanTransactionUrl } from "../../lib/explorers";
+import { hashscanAccountUrl, hashscanTransactionUrl } from "../../lib/explorers";
 import { useClock } from "../../lib/use-clock";
 
 const skillNames: Record<(typeof SKILL_IDS)[number], string> = {
@@ -61,6 +61,8 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
   const [acknowledged, setAcknowledged] = useState(false);
   const [watchingDurableEvents, setWatchingDurableEvents] = useState(false);
   const startAt = useRef<number>(0);
+  // Buyer USDC balance captured when a run starts, to show before/after (docs/06 console).
+  const [balanceBefore, setBalanceBefore] = useState<string | null>(null);
   const now = useClock() ?? Date.now();
   const budget = useQuery({
     queryKey: ["buyer-budget", Boolean(auth?.authenticated)],
@@ -73,6 +75,14 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
     },
     refetchInterval: 30_000,
   });
+  // The mirror node lags a few seconds behind consensus; refresh shortly after a run settles.
+  const finished = state.phase === "complete";
+  const refetchBudget = budget.refetch;
+  useEffect(() => {
+    if (!finished) return;
+    const timer = setTimeout(() => void refetchBudget(), 4_000);
+    return () => clearTimeout(timer);
+  }, [finished, refetchBudget]);
   const persistedEvents = useQuery({
     queryKey: ["buyer-run-events", state.runId],
     enabled: watchingDurableEvents && Boolean(state.runId) && Boolean(auth?.authenticated),
@@ -136,6 +146,7 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
     setWatchingDurableEvents(false);
     dispatch({ type: "start", runId: "" });
     startAt.current = Date.now();
+    setBalanceBefore(budget.data?.wallet?.usdcAtomic ?? null);
     const requestController = new AbortController();
     const timeout = setTimeout(() => requestController.abort(), 120_000);
     let knownRejected = false;
@@ -358,9 +369,34 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
             <div className="buyer-card card">
               <strong>Buyer agent</strong>
               <span className="mono">Public buyer run</span>
-              <div className="muted small-note">
-                Hedera mirror-node wallet balance is not exposed by the available frontend API.
-              </div>
+              {budget.data.wallet ? (
+                <div className="mono small-note">
+                  wallet{" "}
+                  {hashscanAccountUrl(budget.data.wallet.accountId) ? (
+                    <a
+                      href={hashscanAccountUrl(budget.data.wallet.accountId)!}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
+                      {budget.data.wallet.accountId} ↗
+                    </a>
+                  ) : (
+                    budget.data.wallet.accountId
+                  )}
+                  <br />
+                  {balanceBefore !== null && <>before {formatUsdc(BigInt(balanceBefore))} · </>}
+                  {balanceBefore !== null ? "now " : "balance "}
+                  <b>
+                    {budget.data.wallet.usdcAtomic === null
+                      ? `unavailable (${budget.data.wallet.error ?? "mirror node"})`
+                      : `${formatUsdc(BigInt(budget.data.wallet.usdcAtomic))} USDC`}
+                  </b>
+                </div>
+              ) : (
+                <div className="muted small-note">
+                  The server has no buyer wallet configured (BUYER_HEDERA_ACCOUNT_ID).
+                </div>
+              )}
               <div className="mono budget-line">
                 spent today{" "}
                 <b>

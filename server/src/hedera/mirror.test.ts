@@ -69,3 +69,29 @@ describe("checkPayoutAccount", () => {
     ).rejects.toThrow(/HTTP 500/);
   });
 });
+
+describe("usdcBalance", () => {
+  it("reads the USDC balance and treats no relationship as zero", async () => {
+    const { usdcBalance } = await import("./mirror.js");
+    const path = `/api/v1/accounts/0.0.5/tokens?token.id=${USDC}`;
+    expect(
+      await usdcBalance(
+        "0.0.5",
+        USDC,
+        fakeFetch({
+          [path]: { status: 200, body: { tokens: [{ token_id: USDC, balance: 940000 }] } },
+        }),
+      ),
+    ).toBe(940_000n);
+    expect(
+      await usdcBalance(
+        "0.0.5",
+        USDC,
+        fakeFetch({ [path]: { status: 200, body: { tokens: [] } } }),
+      ),
+    ).toBe(0n);
+    await expect(
+      usdcBalance("0.0.5", USDC, fakeFetch({ [path]: { status: 404 } })),
+    ).rejects.toThrow(/not found/);
+  });
+});

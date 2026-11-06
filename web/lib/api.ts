@@ -190,4 +190,6 @@ export interface BuyerBudget {
     jobsCompleted: number;
     lastUpdated: string;
   };
+  /** Buyer wallet read live from the Hedera mirror node; null when the server has no buyer. */
+  wallet?: { accountId: string; usdcAtomic: string | null; error?: string } | null;
 }

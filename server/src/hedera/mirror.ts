@@ -62,3 +62,25 @@ export async function checkPayoutAccount(
     ? { ok: true }
     : { ok: false, reason: "not_associated" };
 }
+
+const AccountTokens = z.object({
+  tokens: z.array(z.object({ token_id: z.string(), balance: z.number().int().nonnegative() })),
+});
+
+/** USDC balance (atomic) of an account from the mirror node; 0 when it has no USDC relationship. */
+export async function usdcBalance(
+  accountId: string,
+  tokenId = env.HEDERA_USDC_TOKEN_ID,
+  fetcher: typeof fetch = fetch,
+): Promise<bigint> {
+  const body = await getJson(
+    `/api/v1/accounts/${encodeURIComponent(accountId)}/tokens?token.id=${encodeURIComponent(tokenId)}`,
+    fetcher,
+  );
+  if (body === null) throw new UpstreamError("hedera", `mirror: account ${accountId} not found`);
+  const parsed = AccountTokens.safeParse(body);
+  if (!parsed.success)
+    throw new UpstreamError("hedera", `mirror returned malformed tokens for ${accountId}`);
+  const token = parsed.data.tokens.find((t) => t.token_id === tokenId);
+  return BigInt(token?.balance ?? 0);
+}
