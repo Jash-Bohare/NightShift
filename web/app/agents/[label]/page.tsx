@@ -17,6 +17,7 @@ import {
   PageFrame,
 } from "../../../components/Product";
 import {
+  ApiError,
   serverGet,
   type AgentProfile,
   type AgentQuote,
@@ -26,14 +27,15 @@ import {
 import { getSepoliaClient, readRegistrarResolver } from "../../../lib/chain";
 import { publicEnv } from "../../../lib/public-env";
 import { truncateMiddle } from "../../../lib/truncate";
-import { formatPercent } from "../../../lib/percent";
+import { reputationHeadline } from "../../../lib/percent";
 import {
   etherscanAddressUrl,
   etherscanTransactionUrl,
   hashscanAccountUrl,
   hashscanTransactionUrl,
-  hashscanTopicUrl,
+  hcsMessageUrl,
 } from "../../../lib/explorers";
+import { agentStatusStamp, ownerJobStatusLabel } from "../../../lib/owner";
 
 type LiveRecords = {
   resolver: string | null;
@@ -135,7 +137,16 @@ export default function AgentPage() {
         title={<EnsName name={`${label}.${publicEnv.ensParentName}`} />}
         titleVariant="name"
       >
-        <ErrorPanel message={profile.error.message} onRetry={() => void profile.refetch()} />
+        <div className="section-block">
+          {profile.error instanceof ApiError && profile.error.status === 404 ? (
+            <EmptyPanel
+              title="No worker by this name."
+              detail={`${label}.${publicEnv.ensParentName} is not registered with Nightshift. Check the spelling or browse tonight’s roster.`}
+            />
+          ) : (
+            <ErrorPanel message={profile.error.message} onRetry={() => void profile.refetch()} />
+          )}
+        </div>
         <Link className="button section-block" href="/directory">
           ← Back to directory
         </Link>
@@ -208,9 +219,11 @@ export default function AgentPage() {
             </div>
             <div className="reputation-seal">
               <span className="mono">REPUTATION</span>
-              <strong>{reputation ? formatPercent(reputation.success) : "—"}</strong>
+              <strong>{reputation ? reputationHeadline(reputation).headline : "—"}</strong>
               <span className="mono">
-                {reputation ? `${reputation.jobs} JOBS · ENS` : "NOT VERIFIED"}
+                {reputation
+                  ? `${reputation.jobs} ${reputation.jobs === 1 ? "JOB" : "JOBS"} · ENS`
+                  : "NOT VERIFIED"}
               </span>
             </div>
           </div>
@@ -220,10 +233,10 @@ export default function AgentPage() {
         </section>
         <aside className="profile-aside">
           <span
-            className={`stamp ${agent.status === "active" ? "stamp--green" : "stamp--red"}`}
+            className={`stamp stamp--${agentStatusStamp(agent.status).tone}`}
             title="Status from the public directory API"
           >
-            {agent.status.replaceAll("_", " ").toUpperCase()}
+            {agentStatusStamp(agent.status).text}
           </span>
           <p>{directoryData?.description ?? "No description published in the directory."}</p>
           <div className="button-row">
@@ -320,7 +333,7 @@ export default function AgentPage() {
       <section className="card hard-shadow profile-worklog section-block">
         <header className="section-header">
           <h2 className="section-title riso">Work log</h2>
-          <span className="mono">public Supabase jobs · live updates</span>
+          <span className="mono">from the Nightshift jobs API · refreshes every 30 s</span>
         </header>
         {jobs.isPending ? (
           <LoadingPanel label="Loading recent public jobs…" />
@@ -338,7 +351,7 @@ export default function AgentPage() {
                 <tr>
                   <th>Time UTC</th>
                   <th>Status</th>
-                  <th>Paid</th>
+                  <th>Paid (USDC)</th>
                   <th>Latency</th>
                   <th>Hedera tx</th>
                   <th>0G request</th>
@@ -348,19 +361,22 @@ export default function AgentPage() {
               <tbody>
                 {jobs.data.map((job) => {
                   const txUrl = job.hedera_tx_id ? hashscanTransactionUrl(job.hedera_tx_id) : null;
-                  const topicUrl = process.env.NEXT_PUBLIC_HEDERA_HCS_TOPIC_ID
-                    ? hashscanTopicUrl(process.env.NEXT_PUBLIC_HEDERA_HCS_TOPIC_ID)
-                    : null;
+                  const hcsUrl =
+                    publicEnv.hederaHcsTopicId && job.hcs_sequence
+                      ? hcsMessageUrl(publicEnv.hederaHcsTopicId, String(job.hcs_sequence))
+                      : null;
                   return (
                     <tr key={job.id}>
                       <td>
                         {new Date(job.created_at).toISOString().replace("T", " ").slice(0, 19)}
                       </td>
-                      <td>{job.status}</td>
+                      <td>{ownerJobStatusLabel(job.status)}</td>
                       <td>
                         {job.status === "settled" ? formatUsdc(BigInt(job.price_atomic)) : "—"}
                       </td>
-                      <td>{job.latency_ms === null ? "—" : `${job.latency_ms} ms`}</td>
+                      <td>
+                        {job.latency_ms === null ? "—" : `${(job.latency_ms / 1000).toFixed(1)} s`}
+                      </td>
                       <td>
                         {txUrl ? (
                           <ExternalLink href={txUrl}>
@@ -381,10 +397,8 @@ export default function AgentPage() {
                         )}
                       </td>
                       <td>
-                        {topicUrl && job.hcs_sequence ? (
-                          <ExternalLink href={`${topicUrl}#${job.hcs_sequence}`}>
-                            #{job.hcs_sequence} ↗
-                          </ExternalLink>
+                        {hcsUrl ? (
+                          <ExternalLink href={hcsUrl}>#{job.hcs_sequence} ↗</ExternalLink>
                         ) : (
                           "—"
                         )}
@@ -469,8 +483,9 @@ function parseReputation(value: string) {
     )
       return null;
     const { success, jobs } = parsed as { success: unknown; jobs: unknown };
-    if (typeof success !== "number" || typeof jobs !== "number") return null;
-    return { success, jobs };
+    // A brand-new worker's record may carry only {"jobs":0}; that is valid, not unverified.
+    if (typeof jobs !== "number") return null;
+    return { success: typeof success === "number" ? success : undefined, jobs };
   } catch {
     return null;
   }

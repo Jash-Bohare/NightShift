@@ -880,6 +880,8 @@ textarea:focus-visible {
 
 .stat-cell {
   padding: 20px 16px;
+  /* Lets .stat-value size itself to the cell, whatever the grid's column count. */
+  container-type: inline-size;
 }
 
 .stat-cell + .stat-cell {
@@ -888,11 +890,12 @@ textarea:focus-visible {
 
 .stat-value {
   margin-top: 5px;
-  font-size: clamp(36px, 5vw, 62px);
+  /* A number never splits across lines; it scales so ~9 characters ($0.037440) fit the cell. */
+  font-size: clamp(24px, 17cqi, 62px);
   font-weight: 800;
   letter-spacing: -0.045em;
   line-height: 1;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .how-grid {
@@ -2023,10 +2026,6 @@ textarea:focus-visible {
     padding-bottom: 2px;
     /* Wrap instead of a hidden-scrollbar strip so every link is visible on a phone. */
     overflow-x: visible;
-  }
-
-  .stat-value {
-    font-size: 26px;
   }
 
   .masthead__actions {

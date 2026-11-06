@@ -282,8 +282,9 @@ function AgentRow({
 
       {agent.status === "paused_budget" && (
         <p className="field-error">
-          Today’s 0G cap is used up; buyers are refused before paying. It resumes automatically when
-          a job fits (after 00:00 UTC or if you raise the cap).
+          Out of credits for today: the next job would cost more than the 0G cap has left, so buyers
+          are refused before paying. It resumes on its own once a job fits again (after 00:00 UTC,
+          or sooner if you raise the cap).
         </p>
       )}
 
@@ -526,7 +527,7 @@ function Payouts({ getToken }: { getToken: TokenFn }) {
           <table className="mono ledger">
             <thead>
               <tr>
-                <th>Date</th>
+                <th>Payday (00:00 UTC)</th>
                 <th>Worker</th>
                 <th>Gross (USDC)</th>
                 <th>You (90%)</th>

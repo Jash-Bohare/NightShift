@@ -10,7 +10,7 @@ import { ErrorPanel, ExternalLink, LoadingPanel } from "../components/Product";
 import { serverGet, type NightshiftStats, type PublicJob } from "../lib/api";
 import { formatUsdMicro } from "../lib/money";
 import { truncateMiddle } from "../lib/truncate";
-import { hashscanTransactionUrl, hashscanTopicUrl } from "../lib/explorers";
+import { hashscanTransactionUrl, hcsMessageUrl } from "../lib/explorers";
 import { publicEnv } from "../lib/public-env";
 
 function useLatestJob() {
@@ -30,7 +30,9 @@ export default function Home() {
   const latest = useLatestJob();
   const job = latest.data;
   const txUrl = job?.hedera_tx_id ? hashscanTransactionUrl(job.hedera_tx_id) : null;
-  const topicUrl = job?.hcs_sequence ? hashscanTopicUrl(publicEnv.hederaHcsTopicId) : null;
+  const topicUrl = job?.hcs_sequence
+    ? hcsMessageUrl(publicEnv.hederaHcsTopicId, String(job.hcs_sequence))
+    : null;
   const agent = Array.isArray(job?.agents) ? job.agents[0] : job?.agents;
 
   return (
@@ -174,7 +176,7 @@ export default function Home() {
                       ? "not recorded"
                       : formatUsdMicro(String(job.zg_cost_usd_micro)),
                 },
-                { label: "paid", value: formatUsdc(BigInt(job.price_atomic)) },
+                { label: "paid", value: `${formatUsdc(BigInt(job.price_atomic))} USDC` },
                 { label: "job id", value: <span title={job.id}>{truncateMiddle(job.id)}</span> },
                 {
                   label: "Hedera tx",
@@ -194,9 +196,7 @@ export default function Home() {
                   label: "HCS sequence",
                   value:
                     job.hcs_sequence && topicUrl ? (
-                      <ExternalLink href={`${topicUrl}#${job.hcs_sequence}`}>
-                        #{job.hcs_sequence} ↗
-                      </ExternalLink>
+                      <ExternalLink href={topicUrl}>#{job.hcs_sequence} ↗</ExternalLink>
                     ) : (
                       "not recorded"
                     ),

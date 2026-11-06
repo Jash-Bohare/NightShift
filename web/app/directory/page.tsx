@@ -9,9 +9,10 @@ import { EnsName } from "../../components/ui/EnsName";
 import { Button } from "../../components/ui/Button";
 import { ErrorPanel, EmptyPanel, LoadingPanel, PageFrame } from "../../components/Product";
 import { serverGet, type DirectoryResponse, type DirectoryAgent } from "../../lib/api";
+import { agentStatusStamp } from "../../lib/owner";
 import { getSepoliaClient, readRegistrarResolver } from "../../lib/chain";
 import { publicEnv } from "../../lib/public-env";
-import { formatPercent } from "../../lib/percent";
+import { reputationHeadline } from "../../lib/percent";
 
 type ActivityJob = {
   status: string;
@@ -253,10 +254,9 @@ function DirectoryRow({ agent, jobs }: { agent: DirectoryAgent; jobs: ActivityJo
     const relation = Array.isArray(job.agents) ? job.agents[0] : job.agents;
     return relation?.label === agent.label;
   });
-  const success = agent.reputation?.success;
+  const reputation = reputationHeadline(agent.reputation);
   const unit = agent.price.unit ?? "unit";
-  const statusTone =
-    agent.status === "active" ? "green" : agent.status === "paused_budget" ? "red" : "muted";
+  const stamp = agentStatusStamp(agent.status);
 
   return (
     <Link className="directory-row" href={`/agents/${encodeURIComponent(agent.label)}`}>
@@ -274,12 +274,14 @@ function DirectoryRow({ agent, jobs }: { agent: DirectoryAgent; jobs: ActivityJo
         <small>/{unit}</small>
       </span>
       <span className="mono directory-reputation">
-        <strong>{success === undefined ? "new" : formatPercent(success)}</strong>
-        <small>{agent.reputation?.jobs ?? 0} jobs</small>
+        <strong>{reputation.headline}</strong>
+        <small>
+          {reputation.jobs} {reputation.jobs === 1 ? "job" : "jobs"}
+        </small>
       </span>
       <ShiftStrip jobs={agentJobs} />
       <span className="directory-stamps">
-        <span className={`stamp stamp--${statusTone}`}>{agent.status.replaceAll("_", " ")}</span>
+        <span className={`stamp stamp--${stamp.tone}`}>{stamp.text}</span>
         {verifier.isPending && publicEnv.sepoliaRpcUrl && <small className="mono">checking…</small>}
         {verifier.data === true && <span className="stamp stamp--blue">✓ ENS VERIFIED</span>}
         {verifier.isError && <small className="mono muted">not verified</small>}
