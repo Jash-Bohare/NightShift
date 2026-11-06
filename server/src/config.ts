@@ -79,6 +79,19 @@ const EnvSchema = z
       .default("false")
       .transform((value) => value === "true"),
     BUYER_CONSOLE_ALLOWED_PRIVY_USER_IDS: z.string().optional(),
+    // Owner self-service launch (POST /me/agents). Each launch spends operator Sepolia gas,
+    // a 2 HBAR account float and an optional ETH drip, so it is opt-in.
+    OWNER_LAUNCH_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    OWNER_MAX_AGENTS: z.coerce.number().int().min(1).max(100).default(3),
+    // Sepolia ETH sent to a launching owner whose balance is under 0.002 ETH (0 disables).
+    SEPOLIA_DRIP_WEI: z
+      .string()
+      .regex(/^\d{1,20}$/)
+      .default("3000000000000000")
+      .transform((value) => BigInt(value)),
     PRIVY_APP_ID: z.string().min(1).optional(),
     PRIVY_APP_SECRET: z.string().min(1).optional(),
     // Optional PEM (SPKI) ES256 key from the Privy dashboard. When set, access tokens are
@@ -119,13 +132,14 @@ const EnvSchema = z
         value.HCS_SUBMIT_ENABLED ||
         value.PAYOUTS_ENABLED ||
         value.CRONS_ENABLED ||
-        value.BUYER_CONSOLE_ENABLED
+        value.BUYER_CONSOLE_ENABLED ||
+        value.OWNER_LAUNCH_ENABLED
       )
         ctx.addIssue({
           code: "custom",
           path: ["NIGHTSHIFT_SIMULATION"],
           message:
-            "simulation requires HCS_SUBMIT_ENABLED, PAYOUTS_ENABLED, CRONS_ENABLED and BUYER_CONSOLE_ENABLED to be false",
+            "simulation requires HCS_SUBMIT_ENABLED, PAYOUTS_ENABLED, CRONS_ENABLED, BUYER_CONSOLE_ENABLED and OWNER_LAUNCH_ENABLED to be false",
         });
     }
     if (value.PAYOUTS_ENABLED && !value.CRONS_ENABLED)
@@ -133,6 +147,12 @@ const EnvSchema = z
         code: "custom",
         path: ["PAYOUTS_ENABLED"],
         message: "payouts run on the scheduler; set CRONS_ENABLED=true explicitly to use them",
+      });
+    if (value.OWNER_LAUNCH_ENABLED && (!value.PRIVY_APP_ID || !value.PRIVY_APP_SECRET))
+      ctx.addIssue({
+        code: "custom",
+        path: ["OWNER_LAUNCH_ENABLED"],
+        message: "PRIVY_APP_ID and PRIVY_APP_SECRET are required when OWNER_LAUNCH_ENABLED=true",
       });
     if (!value.BUYER_CONSOLE_ENABLED) return;
     if (!value.PRIVY_APP_ID)

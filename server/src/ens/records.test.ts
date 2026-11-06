@@ -42,5 +42,24 @@ describe("buildInitialRecords", () => {
       unit: "minute",
     });
     expect(get("nightshift.payto")).toBe("0.0.123");
+    expect(get("description")).toMatch(/^Transcribes Tamil audio to text\./);
+  });
+  it("uses the owner's description when one is given, ignoring blank input", () => {
+    const base = {
+      label: "tamil-scribe",
+      ensName: "tamil-scribe.nightshift.eth",
+      skill: "transcribe:ta",
+      model: "whisper-large-v3",
+      priceAtomic: 30_000n,
+      priceUnit: "minute",
+      payTo: "0.0.123",
+      usdcTokenId: "0.0.429274",
+      serverUrl: "http://localhost:8787",
+      webUrl: "http://localhost:3000",
+    };
+    const custom = buildInitialRecords({ ...base, description: "  Podcast-grade Tamil.  " });
+    expect(custom.find((r) => r.key === "description")?.value).toBe("Podcast-grade Tamil.");
+    const blank = buildInitialRecords({ ...base, description: "   " });
+    expect(blank.find((r) => r.key === "description")?.value).toMatch(/^Transcribes Tamil/);
   });
 });

@@ -37,7 +37,7 @@ export class ApiError extends Error {
   }
 }
 
-export type Upstream = "0g" | "hedera" | "ens" | "x402" | "db";
+export type Upstream = "0g" | "hedera" | "ens" | "x402" | "db" | "privy";
 
 /** An external dependency failed or timed out. */
 export class UpstreamError extends Error {

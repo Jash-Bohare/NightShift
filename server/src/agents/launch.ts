@@ -6,7 +6,13 @@ import { env } from "../config.js";
 import { encrypt } from "../crypto.js";
 import { db } from "../db/client.js";
 import { ApiError, UpstreamError } from "../errors.js";
-import { available, isValidLabel, registerAgent, etherscanTx } from "../ens/registrar.js";
+import {
+  available,
+  dripIfLow,
+  isValidLabel,
+  registerAgent,
+  etherscanTx,
+} from "../ens/registrar.js";
 import { buildInitialRecords } from "../ens/records.js";
 import { createAgentAccount } from "../hedera/accounts.js";
 import { log, logError } from "../log.js";
@@ -21,7 +27,22 @@ export interface LaunchInput {
   dailyCapUsdMicro: bigint;
   zgApiKey: string;
   zgMgmtKey?: string;
+  description?: string;
+  /** Send Sepolia ETH to a low-balance owner after registration (web launches only). */
+  dripOwnerEth?: boolean;
 }
+
+export type LaunchStep = "validate" | "zg_key" | "hedera_account" | "ens_register" | "drip";
+
+export type LaunchProgress =
+  | { step: LaunchStep; status: "running" }
+  | { step: "hedera_account"; status: "done"; account: string }
+  | { step: "ens_register"; status: "sent"; txHash: string }
+  | { step: "ens_register"; status: "done"; txHash: string; resolver: string }
+  | { step: "drip"; status: "done"; txHash: string }
+  | { step: "drip"; status: "skipped"; reason: string }
+  | { step: "drip"; status: "failed"; message: string }
+  | { step: Exclude<LaunchStep, "hedera_account" | "ens_register">; status: "done" };
 
 export interface LaunchResult {
   agentId: string;
@@ -48,8 +69,12 @@ async function upsertOwner(o: LaunchInput["owner"]): Promise<string> {
   return (r.data as { id: string }).id;
 }
 
-export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
+export async function launchAgent(
+  input: LaunchInput,
+  onProgress: (event: LaunchProgress) => void = () => {},
+): Promise<LaunchResult> {
   const { label } = input;
+  onProgress({ step: "validate", status: "running" });
   if (!SKILL_IDS.includes(input.skill))
     throw new ApiError(422, "invalid_input", `unknown skill ${input.skill}`);
   const skill = getSkill(input.skill)!;
@@ -66,8 +91,10 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
       "label_taken",
       `label ${label} already has a row (${existing.data.status})`,
     );
+  onProgress({ step: "validate", status: "done" });
 
   // 1-token call proves the sk- key works and has credit (costs a few micro-USD).
+  onProgress({ step: "zg_key", status: "running" });
   try {
     await chat({
       key: input.zgApiKey,
@@ -82,6 +109,7 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
       `0G key test failed: ${err instanceof Error ? err.message : err}`,
     );
   }
+  onProgress({ step: "zg_key", status: "done" });
   const ensName = `${label}.${ENS_PARENT_NAME}`;
   const ownerId = await upsertOwner(input.owner);
 
@@ -104,6 +132,7 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
   const agentId = (ins.data as { id: string }).id;
 
   let account: Awaited<ReturnType<typeof createAgentAccount>>;
+  onProgress({ step: "hedera_account", status: "running" });
   try {
     account = await createAgentAccount(`nightshift ${ensName}`);
     const accountUpdate = await db
@@ -136,6 +165,8 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
     throw error;
   }
 
+  onProgress({ step: "hedera_account", status: "done", account: account.accountId });
+
   let registrationAttempted = false;
   let registration: Awaited<ReturnType<typeof registerAgent>> | undefined;
   try {
@@ -150,9 +181,13 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
       usdcTokenId: env.HEDERA_USDC_TOKEN_ID,
       serverUrl: env.PUBLIC_SERVER_URL,
       webUrl: env.PUBLIC_WEB_URL,
+      ...(input.description ? { description: input.description } : {}),
     });
     registrationAttempted = true;
-    registration = await registerAgent(label, input.owner.evmAddress, records);
+    onProgress({ step: "ens_register", status: "running" });
+    registration = await registerAgent(label, input.owner.evmAddress, records, (txHash) =>
+      onProgress({ step: "ens_register", status: "sent", txHash }),
+    );
     const upd = await db
       .from("agents")
       .update({
@@ -175,13 +210,12 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
       hedera: account.accountId,
       tx: etherscanTx(registration.txHash),
     });
-    return {
-      agentId,
-      ensName,
-      registerTx: registration.txHash,
+    onProgress({
+      step: "ens_register",
+      status: "done",
+      txHash: registration.txHash,
       resolver: registration.resolver,
-      hederaAccount: account.accountId,
-    };
+    });
   } catch (err) {
     logError("ens", `launch of ${ensName} failed; manual reconciliation may be required`, err);
     const patch = registrationAttempted
@@ -201,4 +235,34 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
       logError("db", `launch ${agentId} recovery status update failed`, result.error);
     throw err;
   }
+
+  // The agent is live. The drip only helps the owner sign later record edits, so its failure is
+  // reported but never fails the launch.
+  if (input.dripOwnerEth) {
+    onProgress({ step: "drip", status: "running" });
+    try {
+      const drip = await dripIfLow(input.owner.evmAddress);
+      if (drip.kind === "sent") onProgress({ step: "drip", status: "done", txHash: drip.txHash });
+      else
+        onProgress({
+          step: "drip",
+          status: "skipped",
+          reason: drip.kind === "disabled" ? "drip disabled" : "owner already has Sepolia ETH",
+        });
+    } catch (error) {
+      logError("ens", `owner drip for ${ensName} failed`, error);
+      onProgress({
+        step: "drip",
+        status: "failed",
+        message: error instanceof Error ? error.message : "drip failed",
+      });
+    }
+  }
+  return {
+    agentId,
+    ensName,
+    registerTx: registration.txHash,
+    resolver: registration.resolver,
+    hederaAccount: account.accountId,
+  };
 }

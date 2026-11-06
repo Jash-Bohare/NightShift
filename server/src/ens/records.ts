@@ -25,6 +25,8 @@ export interface RecordInput {
   usdcTokenId: string;
   serverUrl: string;
   webUrl: string;
+  /** Owner-written description; defaults to a generated one. */
+  description?: string;
 }
 
 export function buildInitialRecords(a: RecordInput): { key: OwnerKey; value: string }[] {
@@ -33,7 +35,9 @@ export function buildInitialRecords(a: RecordInput): { key: OwnerKey; value: str
   const price = formatUsdc(a.priceAtomic);
   const what =
     kind === "transcribe" ? `Transcribes ${language} audio to text` : `Runs the ${a.skill} skill`;
-  const description = `${what}. Runs ${a.model} on 0G Compute. Paid per ${a.priceUnit} in USDC via x402 on Hedera.`;
+  const description =
+    a.description?.trim() ||
+    `${what}. Runs ${a.model} on 0G Compute. Paid per ${a.priceUnit} in USDC via x402 on Hedera.`;
   const context = [
     `# ${titleFromLabel(a.label)}`,
     `${what}. Runs \`${a.model}\` on the 0G Compute Router (TEE provider).`,
