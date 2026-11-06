@@ -36,6 +36,12 @@ vi.mock("../auth/privy-wallets.js", () => ({
   linkedEthereumWallets: vi.fn(async () => state.wallets),
 }));
 vi.mock("../agents/launch.js", () => ({ launchAgent: state.launch }));
+vi.mock("../zg/router.js", () => ({
+  balance: vi.fn(async (key: string) => {
+    if (key !== "mk-goodgoodgood") throw new Error("401");
+    return { address: "0x1", currency: "usd", credit_balance: "4987517", total_balance: "4987517" };
+  }),
+}));
 vi.mock("../ens/indexer.js", () => ({ syncAgentToDirectory: state.sync }));
 vi.mock("../hedera/mirror.js", () => ({
   checkPayoutAccount: vi.fn(async () =>
@@ -232,5 +238,35 @@ describe("POST /me/agents", () => {
     release();
     expect((await first).status).toBe(200);
     expect((await post(valid)).status).toBe(200);
+  });
+});
+
+describe("POST /me/zg-balance", () => {
+  function balance(body: unknown, token: string | null = "owner") {
+    return fetch(`${baseUrl}/me/zg-balance`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  }
+  it("requires auth and an mk- key", async () => {
+    expect((await balance({ zgMgmtKey: "mk-goodgoodgood" }, null)).status).toBe(401);
+    expect((await balance({ zgMgmtKey: "sk-goodgoodgood" })).status).toBe(422);
+  });
+  it("returns micro-USD balances as strings", async () => {
+    const res = await balance({ zgMgmtKey: "mk-goodgoodgood" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      creditBalanceUsdMicro: "4987517",
+      totalBalanceUsdMicro: "4987517",
+    });
+  });
+  it("maps a rejected key to invalid_zg_key", async () => {
+    const res = await balance({ zgMgmtKey: "mk-badbadbadbad" });
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: string }).error).toBe("invalid_zg_key");
   });
 });

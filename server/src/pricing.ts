@@ -45,3 +45,22 @@ export function priceFor(priceAtomicPerUnit: bigint, units: number): bigint {
   if (priceAtomicPerUnit < 0n) throw new Error("negative price");
   return priceAtomicPerUnit * BigInt(Math.max(1, Math.ceil(units)));
 }
+
+/**
+ * Launch-wizard price suggestion (docs/06 step 3): `multiple` × the 0G cost of one billed unit,
+ * in USDC atomic units (1 atomic = 1e-6 USDC, treated as 1 micro-USD), rounded up.
+ */
+export function suggestedPriceAtomic(
+  picoPerMeterUnit: bigint,
+  meterPerUnit: bigint,
+  multiple = 4n,
+): { costUsdMicroPerUnit: bigint; suggestedAtomic: bigint } {
+  if (picoPerMeterUnit < 0n || meterPerUnit <= 0n || multiple <= 0n)
+    throw new Error("invalid pricing input");
+  const pico = picoPerMeterUnit * meterPerUnit;
+  const costUsdMicroPerUnit = (pico + PICO_PER_MICRO - 1n) / PICO_PER_MICRO;
+  return {
+    costUsdMicroPerUnit,
+    suggestedAtomic: (pico * multiple + PICO_PER_MICRO - 1n) / PICO_PER_MICRO,
+  };
+}

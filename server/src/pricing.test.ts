@@ -67,3 +67,18 @@ describe("priceFor", () => {
     expect(priceFor(30_000n, 1.2)).toBe(60_000n);
   });
 });
+
+describe("suggestedPriceAtomic", () => {
+  it("is 4x the 0G cost of one billed unit (Whisper: 60 s at $0.00013/s)", async () => {
+    const { suggestedPriceAtomic } = await import("./pricing.js");
+    expect(suggestedPriceAtomic(130_000_000n, 60n)).toEqual({
+      costUsdMicroPerUnit: 7_800n,
+      suggestedAtomic: 31_200n,
+    });
+  });
+  it("rounds up and rejects invalid input", async () => {
+    const { suggestedPriceAtomic } = await import("./pricing.js");
+    expect(suggestedPriceAtomic(1n, 1n)).toEqual({ costUsdMicroPerUnit: 1n, suggestedAtomic: 1n });
+    expect(() => suggestedPriceAtomic(1n, 0n)).toThrow();
+  });
+});

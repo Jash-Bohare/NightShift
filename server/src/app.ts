@@ -13,6 +13,7 @@ import { jobsRouter } from "./routes/jobs.js";
 import { meRouter } from "./routes/me.js";
 import { meAgentsRouter } from "./routes/meAgents.js";
 import { meLaunchRouter } from "./routes/meLaunch.js";
+import { skillsRouter } from "./routes/skills.js";
 import { publicRouter } from "./routes/public.js";
 import { payoutsRouter } from "./routes/payouts.js";
 import { runHandler, runPrecheck } from "./routes/run.js";
@@ -42,9 +43,13 @@ export function createApp(): express.Express {
     rateLimit("worker", env.WORKER_REQUESTS_PER_MINUTE, 60_000),
   );
   app.use(["/health", "/ready"], rateLimit("health", 30, 60_000));
-  app.use(["/directory", "/agents", "/jobs", "/stats"], rateLimit("public", 240, 60_000));
+  app.use(
+    ["/directory", "/agents", "/jobs", "/stats", "/skills"],
+    rateLimit("public", 240, 60_000),
+  );
   app.use(["/me", "/buyer-console"], rateLimit("private", 120, 60_000));
   app.use(publicRouter);
+  app.use(skillsRouter);
   app.use(directoryRouter);
   app.use(payoutsRouter);
   app.use(jobsRouter);

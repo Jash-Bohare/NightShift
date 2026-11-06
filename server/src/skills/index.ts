@@ -25,6 +25,8 @@ export interface Skill {
   id: SkillId;
   model: string;
   unit: "minute";
+  /** 0G meter units in one billed unit (Whisper bills seconds, buyers pay per minute). */
+  meterPerUnit: bigint;
   /** Validate and measure the input locally. Throws a message on bad input. */
   measure(input: SkillInput): Promise<Measured>;
   execute(args: { key: string; model: string; input: SkillInput }): Promise<ZgResult>;
@@ -35,6 +37,7 @@ function transcribeSkill(id: SkillId, language: string): Skill {
     id,
     model: env.ZG_WHISPER_MODEL,
     unit: "minute",
+    meterPerUnit: 60n,
     async measure(input) {
       if (!(AUDIO_MIME as readonly string[]).includes(input.mime))
         throw new Error(`unsupported audio type ${input.mime}`);

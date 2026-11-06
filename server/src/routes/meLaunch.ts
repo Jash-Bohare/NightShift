@@ -16,6 +16,7 @@ import { syncAgentToDirectory } from "../ens/indexer.js";
 import { ApiError, UpstreamError } from "../errors.js";
 import { checkPayoutAccount } from "../hedera/mirror.js";
 import { logError } from "../log.js";
+import { balance as zgBalance } from "../zg/router.js";
 import { MAX_DAILY_CAP_USD_MICRO } from "./meAgents.js";
 
 export const meLaunchRouter = Router();
@@ -156,4 +157,39 @@ meLaunchRouter.post("/me/agents", express.json({ limit: "16kb" }), async (req, r
   } finally {
     launchInFlight = false;
   }
+});
+
+const BalanceBody = z
+  .object({
+    zgMgmtKey: z.string().regex(/^mk-[A-Za-z0-9_-]{8,200}$/, "a 0G management key (mk-…)"),
+  })
+  .strict();
+const MicroAmount = z.string().regex(/^\d{1,30}$/);
+
+/**
+ * Launch wizard step 1: read the owner's 0G balance with their read-only mk- key. The key is used
+ * for this one request and is neither stored nor logged; it is stored only if the owner submits
+ * it with the launch.
+ */
+meLaunchRouter.post("/me/zg-balance", express.json({ limit: "4kb" }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  await authenticatePrivyUser(req.header("authorization"));
+  const body = BalanceBody.safeParse(req.body);
+  if (!body.success)
+    throw new ApiError(422, "invalid_input", "a 0G management key (mk-…) is required");
+  let result: Awaited<ReturnType<typeof zgBalance>>;
+  try {
+    result = await zgBalance(body.data.zgMgmtKey);
+  } catch {
+    throw new ApiError(
+      422,
+      "invalid_zg_key",
+      "0G rejected this management key or is unreachable; check it has account:read",
+    );
+  }
+  const credit = MicroAmount.safeParse(String(result.credit_balance ?? ""));
+  const total = MicroAmount.safeParse(String(result.total_balance ?? ""));
+  if (!credit.success || !total.success)
+    throw new UpstreamError("0g", "balance response is malformed");
+  res.json({ creditBalanceUsdMicro: credit.data, totalBalanceUsdMicro: total.data });
 });
