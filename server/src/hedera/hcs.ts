@@ -21,8 +21,25 @@ export interface JobMessage {
   ts: string;
 }
 
+/** Daily payout (docs/04 § Hedera: "Payouts also log {type:"payout",...}"). */
+export interface PayoutMessage {
+  v: 1;
+  type: "payout";
+  agent: string;
+  payout: string;
+  date: string;
+  gross: string;
+  owner: string;
+  fee: string;
+  asset: string;
+  to: string;
+  treasury: string;
+  tx: string;
+  ts: string;
+}
+
 /** Submit a message and return its topic sequence number. */
-export async function submitHcs(msg: JobMessage): Promise<bigint> {
+export async function submitHcs(msg: JobMessage | PayoutMessage): Promise<bigint> {
   const body = JSON.stringify(msg);
   if (Buffer.byteLength(body) > 1024) throw new UpstreamError("hedera", "HCS message over 1 KB");
   const receipt = await withTimeout(
@@ -42,7 +59,7 @@ export async function submitHcs(msg: JobMessage): Promise<bigint> {
   log("hedera", "HCS message", {
     topic: env.HEDERA_HCS_TOPIC_ID,
     seq: seq.toString(),
-    job: msg.job,
+    ...(msg.type === "job" ? { job: msg.job } : { payout: msg.payout }),
   });
   return BigInt(seq.toString());
 }

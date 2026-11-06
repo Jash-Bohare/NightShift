@@ -11,7 +11,8 @@
     "dev:simulated": "tsx src/dev/simulated-stack.ts",
     "simulate:buyer": "tsx src/dev/simulated-buyer.ts",
     "test:e2e": "vitest run src/e2e",
-    "test:db": "vitest run src/db/migrations.test.ts"
+    "test:db": "vitest run src/db/migrations.test.ts",
+    "payday": "tsx src/cron/payday-now.ts"
   },
   "dependencies": {
     "@hiero-ledger/sdk": "2.85.0",

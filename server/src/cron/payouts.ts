@@ -4,9 +4,11 @@ import { db } from "../db/client.js";
 import { env } from "../config.js";
 import { UpstreamError } from "../errors.js";
 import { log, logError } from "../log.js";
+import { submitHcs } from "../hedera/hcs.js";
 
 export const PAYOUT_MINIMUM_ATOMIC = 10_000n;
-export const PAYOUT_FEE_BPS = 0;
+/** Nightshift's take: 10% of each payout to TREASURY_ACCOUNT_ID, 90% to the owner (docs/01). */
+export const PAYOUT_FEE_BPS = 1_000;
 
 export interface PayoutRecord {
   id: string;
@@ -250,23 +252,76 @@ export async function sendPayoutTransfer(args: {
   }
 }
 
+/** Called after a confirmed transfer. Best effort: never changes the payout's money state. */
+export type PayoutAnnouncer = (payout: PayoutRecord, transactionId: string) => Promise<void>;
+
+/** HCS audit message for a confirmed payout (skipped when HCS_SUBMIT_ENABLED=false). */
+export async function announcePayoutOnHcs(
+  payout: PayoutRecord,
+  transactionId: string,
+): Promise<void> {
+  if (!env.HCS_SUBMIT_ENABLED) return;
+  const agent = await db.from("agents").select("ens_name").eq("id", payout.agent_id).maybeSingle();
+  if (agent.error || !agent.data)
+    throw new UpstreamError(
+      "db",
+      `payout agent ${payout.agent_id}: ${agent.error?.message ?? "missing"}`,
+    );
+  const seq = await submitHcs({
+    v: 1,
+    type: "payout",
+    agent: (agent.data as { ens_name: string }).ens_name,
+    payout: payout.id,
+    date: payout.payout_date,
+    gross: String(payout.gross_atomic),
+    owner: String(payout.owner_atomic),
+    fee: String(payout.fee_atomic),
+    asset: env.HEDERA_USDC_TOKEN_ID,
+    to: payout.destination_account ?? "",
+    treasury: env.TREASURY_ACCOUNT_ID,
+    tx: transactionId,
+    ts: new Date().toISOString(),
+  });
+  log("hedera", "payout logged to HCS", { payout: payout.id, seq: seq.toString() });
+}
+
+/** The payout batch date: today's UTC date, or tomorrow's to include today's jobs. */
+export function payoutDate(now: Date, throughNow = false): string {
+  const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  if (throughNow) day.setUTCDate(day.getUTCDate() + 1);
+  return day.toISOString().slice(0, 10);
+}
+
 export async function runDailyPayouts(
   options: {
     store?: PayoutStore;
     sender?: PayoutSender;
+    announce?: PayoutAnnouncer;
     now?: Date;
+    /** Operator-triggered run (scripts/payday): runs even when PAYOUTS_ENABLED=false. */
+    manual?: boolean;
+    /**
+     * Include jobs settled before the next 00:00 UTC (the batch is dated tomorrow, i.e. the
+     * midnight the shift ends). The scheduled 00:15 run for that date then finds it already
+     * claimed and pays only later jobs on the following day.
+     */
+    throughNow?: boolean;
   } = {},
 ): Promise<{ confirmed: number; failed: number; uncertain: number; skipped: number }> {
   const mockedTestRun =
     env.NODE_ENV === "test" && options.store !== undefined && options.sender !== undefined;
-  if (!env.PAYOUTS_ENABLED && !mockedTestRun) {
+  if (options.manual && env.NIGHTSHIFT_SIMULATION)
+    throw new Error("manual payouts are refused in simulation mode");
+  if (!env.PAYOUTS_ENABLED && !mockedTestRun && !options.manual) {
     log("cron", "daily payout processing is disabled");
     return { confirmed: 0, failed: 0, uncertain: 0, skipped: 0 };
   }
   const store = options.store ?? databaseStore;
   const sender = options.sender ?? sendPayoutTransfer;
+  const announce: PayoutAnnouncer =
+    options.announce ?? (mockedTestRun ? async () => {} : announcePayoutOnHcs);
   const now = options.now ?? new Date();
-  const date = now.toISOString().slice(0, 10);
+  const date = payoutDate(now, options.throughNow);
   const claimed = await store.claimEligible(date);
   const interrupted = await store.listSubmitted(new Date(now.getTime() - 5 * 60_000).toISOString());
   for (const payout of interrupted) {
@@ -305,6 +360,9 @@ export async function runDailyPayouts(
       await store.mark(payout.id, "confirmed", { hedera_tx_id: transactionId });
       counts.confirmed++;
       log("hedera", "daily payout confirmed", { payout: payout.id, transaction: transactionId });
+      await announce(payout, transactionId).catch((error: unknown) =>
+        logError("hedera", `payout ${payout.id} confirmed but HCS log failed`, error),
+      );
     } catch (error) {
       const uncertain =
         transferStarted && (!(error instanceof PayoutTransferError) || error.uncertain);

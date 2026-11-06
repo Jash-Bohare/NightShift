@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   calculatePayout,
+  payoutDate,
   PayoutTransferError,
   runDailyPayouts,
   type PayoutRecord,
@@ -71,7 +72,8 @@ describe("daily payout processing", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("calculates payout fees with integer atomic units", () => {
-    expect(calculatePayout(100_001n)).toEqual({ ownerAtomic: 100_001n, feeAtomic: 0n });
+    // Default policy is the 90/10 split from docs/01.
+    expect(calculatePayout(100_000n)).toEqual({ ownerAtomic: 90_000n, feeAtomic: 10_000n });
     expect(calculatePayout(100_001n, 1_000)).toEqual({
       ownerAtomic: 90_001n,
       feeAtomic: 10_000n,
@@ -151,5 +153,52 @@ describe("daily payout processing", () => {
     await Promise.all([runDailyPayouts({ store, sender }), runDailyPayouts({ store, sender })]);
 
     expect(sender).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces only confirmed payouts, and an announcement failure changes nothing", async () => {
+    const { store, rows } = createStore();
+    const sender = vi.fn(async () => ({ transactionId: "0.0.100@1770000000.000000001" }));
+    const announce = vi.fn(async () => {
+      throw new Error("HCS down");
+    });
+    const result = await runDailyPayouts({ store, sender, announce });
+    expect(result.confirmed).toBe(1);
+    expect(announce).toHaveBeenCalledTimes(1);
+    expect(announce).toHaveBeenCalledWith(
+      expect.objectContaining({ id: row.id }),
+      "0.0.100@1770000000.000000001",
+    );
+    expect(rows.get(row.id)?.status).toBe("confirmed");
+
+    const failing = createStore();
+    const announce2 = vi.fn(async () => {});
+    await runDailyPayouts({
+      store: failing.store,
+      sender: vi.fn(async () => {
+        throw new PayoutTransferError("receipt reverted", false);
+      }),
+      announce: announce2,
+    });
+    expect(announce2).not.toHaveBeenCalled();
+  });
+
+  it("dates batches by UTC day, or the next midnight when paying through now", () => {
+    const evening = new Date("2026-11-06T21:30:00Z");
+    expect(payoutDate(evening)).toBe("2026-11-06");
+    expect(payoutDate(evening, true)).toBe("2026-11-07");
+    expect(payoutDate(new Date("2026-12-31T23:59:59Z"), true)).toBe("2027-01-01");
+  });
+
+  it("claims with the through-now date on a manual run", async () => {
+    const { store } = createStore();
+    const sender = vi.fn(async () => ({ transactionId: "0.0.100@1770000000.000000001" }));
+    await runDailyPayouts({
+      store,
+      sender,
+      manual: true,
+      throughNow: true,
+      now: new Date("2026-11-06T21:30:00Z"),
+    });
+    expect(store.claimEligible).toHaveBeenCalledWith("2026-11-07");
   });
 });
