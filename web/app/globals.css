@@ -1821,6 +1821,10 @@ textarea:focus-visible {
   justify-self: start;
 }
 
+.launch-blocked {
+  margin-bottom: 16px;
+}
+
 .launch-auth p {
   margin: 0;
 }

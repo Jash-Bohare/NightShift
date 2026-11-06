@@ -19,6 +19,7 @@ import {
   parseBuyerEvent,
 } from "../../lib/console";
 import { formatElapsedSince } from "../../lib/time";
+import { parseMeCapabilities } from "../../lib/capabilities";
 import { publicEnv } from "../../lib/public-env";
 import { hashscanAccountUrl, hashscanTransactionUrl } from "../../lib/explorers";
 import { useClock } from "../../lib/use-clock";
@@ -70,6 +71,19 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
   // Buyer USDC balance captured when a run starts, to show before/after (docs/06 console).
   const [balanceBefore, setBalanceBefore] = useState<string | null>(null);
   const now = useClock() ?? Date.now();
+  // Whether this account may run paid buyer runs on this server (explained before any click).
+  const caps = useQuery({
+    queryKey: ["me-capabilities", Boolean(auth?.authenticated)],
+    enabled: Boolean(auth?.authenticated),
+    queryFn: async ({ signal }) => {
+      const accessToken = await auth?.getAccessToken();
+      if (!accessToken) throw new Error("Privy did not provide an access token.");
+      return parseMeCapabilities(await serverGet<unknown>("/me/capabilities", signal, accessToken));
+    },
+    retry: 1,
+    staleTime: 60_000,
+  });
+  const runBlocked = caps.data?.canRunBuyerConsole === false;
   const budget = useQuery({
     queryKey: ["buyer-budget", Boolean(auth?.authenticated)],
     enabled: Boolean(auth?.authenticated),
@@ -299,6 +313,7 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
           variant="ink"
           disabled={
             !publicEnv.privyAppId ||
+            runBlocked ||
             (Boolean(auth?.authenticated) && (!budget.data || !acknowledged)) ||
             state.phase === "running" ||
             state.phase === "resuming"
@@ -331,6 +346,10 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
         ) : !auth?.authenticated ? (
           <p role="status" className="mono control-disclaimer">
             Sign in with an authorized account before starting or resuming a buyer run.
+          </p>
+        ) : runBlocked ? (
+          <p role="status" className="mono control-disclaimer">
+            {caps.data?.buyerConsoleReason ?? "Paid buyer runs are not available on this server."}
           </p>
         ) : null}
         <label className="mono control-disclaimer">

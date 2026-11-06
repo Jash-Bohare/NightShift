@@ -111,6 +111,9 @@ const EnvSchema = z
       .default("false")
       .transform((value) => value === "true"),
     OWNER_MAX_AGENTS: z.coerce.number().int().min(1).max(100).default(3),
+    // Optional comma-separated did:privy:* allow-list for launches. Empty = any signed-in owner
+    // (local use); set it on a public deployment so only these accounts can spend operator funds.
+    OWNER_LAUNCH_ALLOWED_PRIVY_USER_IDS: z.string().optional(),
     // Sepolia ETH sent to a launching owner whose balance is under 0.002 ETH (0 disables).
     SEPOLIA_DRIP_WEI: z
       .string()
@@ -172,6 +175,15 @@ const EnvSchema = z
         code: "custom",
         path: ["PAYOUTS_ENABLED"],
         message: "payouts run on the scheduler; set CRONS_ENABLED=true explicitly to use them",
+      });
+    const launchAllowed = value.OWNER_LAUNCH_ALLOWED_PRIVY_USER_IDS?.split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    if (launchAllowed?.some((id) => !/^did:privy:[A-Za-z0-9]+$/.test(id)))
+      ctx.addIssue({
+        code: "custom",
+        path: ["OWNER_LAUNCH_ALLOWED_PRIVY_USER_IDS"],
+        message: "must be a comma-separated list of did:privy:* user IDs",
       });
     if (value.OWNER_LAUNCH_ENABLED && (!value.PRIVY_APP_ID || !value.PRIVY_APP_SECRET))
       ctx.addIssue({

@@ -18,6 +18,7 @@ import { checkPayoutAccount } from "../hedera/mirror.js";
 import { logError } from "../log.js";
 import { balance as zgBalance } from "../zg/router.js";
 import { MAX_DAILY_CAP_USD_MICRO, MAX_PRICE_ATOMIC } from "../limits.js";
+import { canLaunch } from "../capabilities.js";
 
 export const meLaunchRouter = Router();
 
@@ -58,6 +59,12 @@ meLaunchRouter.post("/me/agents", express.json({ limit: "16kb" }), async (req, r
   const privyUserId = await authenticatePrivyUser(req.header("authorization"));
   if (!env.OWNER_LAUNCH_ENABLED)
     throw new ApiError(503, "feature_disabled", "owner launch is disabled on this server");
+  if (!canLaunch(privyUserId))
+    throw new ApiError(
+      403,
+      "forbidden",
+      "this account is not permitted to launch workers on this server",
+    );
   const parsed = LaunchBody.safeParse(req.body);
   if (!parsed.success)
     throw new ApiError(422, "invalid_input", "invalid launch request", parsed.error.issues);

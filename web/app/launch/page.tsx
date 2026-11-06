@@ -22,6 +22,7 @@ import {
   type LaunchLine,
   type LaunchResult,
 } from "../../lib/launch";
+import { parseMeCapabilities } from "../../lib/capabilities";
 import { publicEnv } from "../../lib/public-env";
 import { truncateMiddle } from "../../lib/truncate";
 import { formatCountdownToUtcMidnight } from "../../lib/time";
@@ -127,6 +128,19 @@ function LaunchWizard() {
     creditBalanceUsdMicro: string;
     totalBalanceUsdMicro: string;
   }>();
+  // What this server lets this account do. A failed check never blocks: the server enforces it.
+  const caps = useQuery({
+    queryKey: ["me-capabilities"],
+    queryFn: async ({ signal }) => {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Privy did not provide an access token.");
+      return parseMeCapabilities(await serverGet<unknown>("/me/capabilities", signal, token));
+    },
+    retry: 1,
+    staleTime: 60_000,
+  });
+  const launchBlocked = caps.data?.canLaunch === false;
+
   const pricing = useQuery({
     queryKey: ["skills-pricing"],
     queryFn: ({ signal }) => serverGet<{ skills: SkillPricing[] }>("/skills", signal),
@@ -177,7 +191,14 @@ function LaunchWizard() {
   }
 
   async function submit() {
-    if (!allValid || phase === "launching" || priceAtomic === null || capMicro === null) return;
+    if (
+      !allValid ||
+      launchBlocked ||
+      phase === "launching" ||
+      priceAtomic === null ||
+      capMicro === null
+    )
+      return;
     setPhase("launching");
     setLines([]);
     setLaunchError(null);
@@ -247,6 +268,15 @@ function LaunchWizard() {
   return (
     <div className="launch-grid section-block">
       <section>
+        {launchBlocked && (
+          <div className="alert-note launch-blocked" role="status">
+            <strong>Launching is not available here.</strong>
+            <p>
+              {caps.data?.launchReason ?? "Launching workers is switched off on this server."} You
+              can walk through the form, but nothing is submitted and no keys are sent.
+            </p>
+          </div>
+        )}
         <div className="step-tabs" role="tablist" aria-label="Launch application steps">
           {["Connect", "Skill", "Name & price", "Budget & keys"].map((name, index) => (
             <button
@@ -553,7 +583,11 @@ function LaunchWizard() {
                 Continue →
               </Button>
             ) : (
-              <Button variant="ink" disabled={!allValid} onClick={() => void submit()}>
+              <Button
+                variant="ink"
+                disabled={!allValid || launchBlocked}
+                onClick={() => void submit()}
+              >
                 Launch worker
               </Button>
             )}
