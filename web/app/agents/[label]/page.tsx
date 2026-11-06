@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { HEDERA_USDC_TOKEN_ID, OWNER_KEYS, REPUTATION_KEY } from "@nightshift/shared/constants";
 import { formatUsdc } from "@nightshift/shared/money";
 import { MoonAvatar } from "../../../components/ui/MoonAvatar";
+import { EnsName } from "../../../components/ui/EnsName";
 import {
   CopyButton,
   EmptyPanel,
@@ -118,14 +119,22 @@ export default function AgentPage() {
 
   if (profile.isPending) {
     return (
-      <PageFrame kicker="Worker identity" title={label} accent={`.${publicEnv.ensParentName}`}>
+      <PageFrame
+        kicker="Worker identity"
+        title={<EnsName name={`${label}.${publicEnv.ensParentName}`} />}
+        titleVariant="name"
+      >
         <LoadingPanel label={`Loading ${label} from the Nightshift API…`} />
       </PageFrame>
     );
   }
   if (profile.isError) {
     return (
-      <PageFrame kicker="Worker identity" title={label} accent={`.${publicEnv.ensParentName}`}>
+      <PageFrame
+        kicker="Worker identity"
+        title={<EnsName name={`${label}.${publicEnv.ensParentName}`} />}
+        titleVariant="name"
+      >
         <ErrorPanel message={profile.error.message} onRetry={() => void profile.refetch()} />
         <Link className="button section-block" href="/directory">
           ← Back to directory
@@ -145,7 +154,8 @@ export default function AgentPage() {
   return (
     <PageFrame
       kicker="ENSv2 · Sepolia"
-      title={agent.ensName}
+      title={<EnsName name={agent.ensName} />}
+      titleVariant="name"
       description="Worker identity, registry records, work log, and the live quote endpoint."
       actions={
         <Link className="button" href="/directory">
@@ -165,7 +175,7 @@ export default function AgentPage() {
               <small className="mono">credit balance not exposed by public API</small>
             </div>
             <div className="id-card__fields">
-              <Field label="Name" value={agent.ensName} />
+              <Field label="Name" value={<EnsName name={agent.ensName} />} />
               <Field label="Skill" value={agent.skill ?? "Not published"} />
               <Field label="Model" value={agent.model ?? "Not published"} />
               <Field
@@ -432,7 +442,7 @@ function Field({
   tone,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   href?: string;
   tone?: "orange";
 }) {

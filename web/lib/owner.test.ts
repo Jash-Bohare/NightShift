@@ -7,6 +7,7 @@ import {
   parseOwnerDashboard,
   parseOwnerJobs,
   parseOwnerPayouts,
+  payoutStatusLabel,
 } from "./owner";
 
 const job = {
@@ -127,5 +128,14 @@ describe("owner payouts contract", () => {
     expect(parseOwnerPayouts({ items: [payout] }).items).toHaveLength(1);
     expect(() => parseOwnerPayouts({ items: [{ ...payout, status: "sent" }] })).toThrow();
     expect(() => parseOwnerPayouts({ items: [{ ...payout, feeAtomic: "0.1" }] })).toThrow();
+  });
+});
+
+describe("payoutStatusLabel", () => {
+  it("names every payout state, calling out uncertain transfers", () => {
+    expect(payoutStatusLabel("confirmed")).toBe("Paid");
+    expect(payoutStatusLabel("submitted")).toBe("In progress");
+    expect(payoutStatusLabel("failed")).toMatch(/retried/);
+    expect(payoutStatusLabel("uncertain")).toMatch(/reconciliation/);
   });
 });

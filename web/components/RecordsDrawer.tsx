@@ -2,7 +2,8 @@
 
 // Owner record edit drawer (docs/06 /dashboard "Edit records", user story O5): the owner's own
 // wallet signs the ENS setText on the worker's PermissionedResolver. Nightshift never signs it.
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWallets } from "@privy-io/react-auth";
 import {
@@ -17,6 +18,7 @@ import {
 import { sepolia } from "viem/chains";
 import { formatUsdc } from "@nightshift/shared/money";
 import { Button } from "./ui/Button";
+import { EnsName } from "./ui/EnsName";
 import { ErrorPanel, ExternalLink, LoadingPanel } from "./Product";
 import { serverGet, serverSend, type AgentProfile } from "../lib/api";
 import { getSepoliaClient } from "../lib/chain";
@@ -57,6 +59,8 @@ function walletError(error: unknown): string {
   return text;
 }
 
+const subscribeNever = () => () => {};
+
 export function RecordsDrawer({
   agent,
   ownerAddress,
@@ -76,18 +80,11 @@ export function RecordsDrawer({
       serverGet<AgentProfile>(`/agents/${encodeURIComponent(agent.label)}`, signal),
     retry: 1,
   });
-  const currentDescription = profile.data?.ens?.description ?? profile.data?.description ?? "";
+  const currentDescription =
+    profile.data?.ens?.texts["description"] ?? profile.data?.description ?? "";
   const [price, setPrice] = useState(decimalFromAtomic(BigInt(agent.priceAtomic)));
   const [description, setDescription] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "form" });
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const descriptionValue = description ?? currentDescription;
   const priceAtomic = atomicFromDecimal(price);
@@ -96,6 +93,29 @@ export function RecordsDrawer({
   const descriptionChanged =
     descriptionValue.trim().length > 0 && descriptionValue.trim() !== currentDescription.trim();
   const busy = ["drafting", "signing", "confirming", "syncing"].includes(phase.kind);
+  const isClient = useSyncExternalStore(
+    subscribeNever,
+    () => true,
+    () => false,
+  );
+
+  // The page behind a modal drawer must not scroll.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
+  // Escape closes like the Close button: never while a signature or confirmation is in flight.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
 
   async function save() {
     if (busy || (!priceChanged && !descriptionChanged)) return;
@@ -172,7 +192,10 @@ export function RecordsDrawer({
 
   const txLink = "txHash" in phase && phase.txHash ? etherscanTransactionUrl(phase.txHash) : null;
 
-  return (
+  // Portalled to <body> so no page stacking context (or the sticky masthead) can cover it.
+  // No <body> exists during server rendering: render nothing there and portal once hydrated.
+  if (!isClient) return null;
+  return createPortal(
     <div className="drawer-backdrop" role="presentation" onClick={busy ? undefined : onClose}>
       <aside
         aria-labelledby="records-drawer-title"
@@ -181,10 +204,23 @@ export function RecordsDrawer({
         role="dialog"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="kick">Edit records · signed by you</div>
-        <h2 className="section-title" id="records-drawer-title">
-          {agent.ensName}
-        </h2>
+        <header className="drawer__head">
+          <div>
+            <div className="kick">Edit records · signed by you</div>
+            <h2 className="drawer__title" id="records-drawer-title">
+              <EnsName name={agent.ensName} />
+            </h2>
+          </div>
+          <button
+            aria-label="Close"
+            className="drawer__close"
+            disabled={busy}
+            type="button"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </header>
         <p className="small-note">
           Changes are ENS text records on this worker’s resolver, signed by your wallet{" "}
           <code className="mono">
@@ -270,6 +306,7 @@ export function RecordsDrawer({
           </Button>
         </div>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }

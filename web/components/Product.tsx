@@ -6,13 +6,16 @@ import Link from "next/link";
 export function PageFrame({
   kicker,
   title,
+  titleVariant = "default",
   accent,
   description,
   actions,
   children,
 }: {
   kicker: string;
-  title: string;
+  title: ReactNode;
+  /** "name": a long ENS name as the title, set smaller so it wraps cleanly on phones. */
+  titleVariant?: "default" | "name";
   accent?: string;
   description?: string;
   actions?: ReactNode;
@@ -23,7 +26,9 @@ export function PageFrame({
       <div className="page-heading">
         <div>
           <div className="kick">{kicker}</div>
-          <h1 className="display-title riso">
+          <h1
+            className={`display-title riso${titleVariant === "name" ? " display-title--name" : ""}`}
+          >
             {title} {accent && <span className="text-orange">{accent}</span>}
           </h1>
           {description && <p className="page-description">{description}</p>}

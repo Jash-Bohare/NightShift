@@ -684,6 +684,13 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
+/* Hints and errors under a field are not part of the bold label text. */
+.control-label .muted,
+.control-label .field-error {
+  font-weight: 400;
+  line-height: 1.5;
+}
+
 .filter-bar {
   display: flex;
   align-items: center;
@@ -1551,6 +1558,11 @@ textarea:focus-visible {
   font-size: 11px;
 }
 
+/* The empty / loading / error states that replace the wire keep the same spacing. */
+.console-controls + .state-panel {
+  margin-top: 22px;
+}
+
 .wire-section {
   margin-top: 22px;
   padding: 20px;
@@ -1789,6 +1801,10 @@ textarea:focus-visible {
   display: grid;
   gap: 8px;
   margin-top: 24px;
+}
+
+.launch-auth .button {
+  justify-self: start;
 }
 
 .launch-auth p {
@@ -2172,15 +2188,26 @@ textarea:focus-visible {
 .owner-jobs th,
 .owner-jobs td {
   text-align: left;
-  padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid currentColor;
+  padding: 0.55rem 0.75rem;
   white-space: nowrap;
+  vertical-align: middle;
+}
+/* Ledger style from the design handoff: 2px ink header rule, dashed row rules. */
+.owner-jobs th {
+  border-bottom: 2px solid var(--ink);
+}
+.owner-jobs td {
+  border-bottom: 1px dashed rgba(31, 37, 71, 0.3);
+}
+.owner-jobs tbody tr:last-child td {
+  border-bottom: 0;
 }
 .owner-jobs__pager {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-top: 2px solid var(--ink);
 }
 
 /* Owner dashboard (P4.5): hero, roster, ledger. */
@@ -2249,10 +2276,22 @@ textarea:focus-visible {
   margin: 0;
   overflow-wrap: anywhere;
 }
+/* A wrapper inside the cell: a flex <td> would leave table layout and break the row rules. */
 .ledger-proof {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 6px;
+}
+.owner-jobs td.ledger-status {
+  min-width: 150px;
+  max-width: 220px;
+  white-space: normal;
+}
+.stamp--sm {
+  border-width: 2px;
+  padding: 2px 6px;
+  font-size: 10px;
 }
 .ledger-row--new {
   animation: ledger-flash 1.6s ease-out;
@@ -2286,8 +2325,65 @@ textarea:focus-visible {
   border-radius: 0;
   background: var(--card);
 }
-.drawer .section-title {
+.drawer__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--ink);
+}
+.drawer__title {
+  margin: 6px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
   overflow-wrap: anywhere;
+}
+.drawer__close {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--white);
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.drawer__close:hover:not(:disabled) {
+  background: var(--yellow);
+}
+.drawer__close:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* The parent name ("nightshift.eth") never splits; the label before it may. */
+.ens-name__parent {
+  white-space: nowrap;
+}
+
+/* Long ENS names as page titles (agent profile). */
+.display-title--name {
+  font-size: clamp(34px, 4.6vw, 60px);
+  letter-spacing: -0.04em;
+  line-height: 1.02;
+}
+
+.dash-payday {
+  margin: 8px 0 0;
+}
+.dash-agent__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dash-agent__today .small-note {
+  display: block;
 }
 
 @media (max-width: 760px) {
@@ -2308,6 +2404,23 @@ textarea:focus-visible {
   }
   .dash-agent__today > div:first-child {
     grid-column: 1 / -1;
+  }
+  .dash-hero .section-title {
+    font-size: 24px;
+  }
+  .dash-agent__controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dash-agent__actions > * {
+    flex: 1 1 0;
+  }
+  .display-title--name {
+    font-size: 30px;
+    letter-spacing: -0.03em;
+  }
+  .drawer {
+    padding: 20px 16px;
   }
 }
 

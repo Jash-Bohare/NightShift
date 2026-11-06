@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatUsdc } from "@nightshift/shared/money";
 import { MoonAvatar } from "../../components/ui/MoonAvatar";
+import { EnsName } from "../../components/ui/EnsName";
 import { Button } from "../../components/ui/Button";
 import { ErrorPanel, EmptyPanel, LoadingPanel, PageFrame } from "../../components/Product";
 import { serverGet, type DirectoryResponse, type DirectoryAgent } from "../../lib/api";
@@ -261,7 +262,9 @@ function DirectoryRow({ agent, jobs }: { agent: DirectoryAgent; jobs: ActivityJo
     <Link className="directory-row" href={`/agents/${encodeURIComponent(agent.label)}`}>
       <MoonAvatar size={44} label={agent.label} />
       <span className="directory-identity">
-        <strong>{agent.ensName}</strong>
+        <strong>
+          <EnsName name={agent.ensName} />
+        </strong>
         <small>
           {agent.skill ?? "Skill not listed"} · {agent.model ?? "Model not listed"}
         </small>

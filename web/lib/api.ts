@@ -159,7 +159,8 @@ export interface DirectoryResponse {
 export interface AgentProfile extends DirectoryAgent {
   registerTx: string | null;
   today: { jobsSettled: number; earnedAtomic: string };
-  ens: Record<string, string | null> | null;
+  /** Records read live from ENS by the server (`readAgentRecords`); null when that read failed. */
+  ens: { name: string; resolver: string | null; texts: Record<string, string> } | null;
   ensError?: string;
 }
 

@@ -6,6 +6,7 @@ import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { SKILL_IDS } from "@nightshift/shared/constants";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "../../components/ui/Button";
+import { EnsName } from "../../components/ui/EnsName";
 import { MoonAvatar } from "../../components/ui/MoonAvatar";
 import { ErrorPanel, ExternalLink, LoadingPanel, PageFrame } from "../../components/Product";
 import { ApiError, errorMessage, serverGet, serverSend } from "../../lib/api";
@@ -682,7 +683,10 @@ function LaunchProgress({
         <div className="complete-banner section-block">
           <span className="stamp stamp--green stamp--tilt-left">WORKER LIVE</span>
           <p>
-            <strong>{result.ensName}</strong> is registered and accepting paid jobs.
+            <strong>
+              <EnsName name={result.ensName} />
+            </strong>{" "}
+            is registered and accepting paid jobs.
           </p>
           <p className="mono">
             {etherscanTransactionUrl(result.registerTx) && (

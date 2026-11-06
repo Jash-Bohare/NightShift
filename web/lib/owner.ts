@@ -267,3 +267,18 @@ export function formatUsdMicro(value: string): string {
   const fraction = (amount % 1_000_000n).toString().padStart(6, "0");
   return `${whole}.${fraction}`;
 }
+
+/** Owner wording for payout states; `uncertain` is called out because it is never resent. */
+export function payoutStatusLabel(status: OwnerPayout["status"]): string {
+  switch (status) {
+    case "confirmed":
+      return "Paid";
+    case "pending":
+    case "submitted":
+      return "In progress";
+    case "failed":
+      return "Failed · retried next payday";
+    case "uncertain":
+      return "Needs reconciliation (outcome unknown)";
+  }
+}
