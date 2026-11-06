@@ -305,15 +305,7 @@ textarea:focus-visible {
   background: var(--yellow);
 }
 
-.moon-avatar__shade {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--moon-shade);
-  transform: translateX(var(--moon-lit-percent));
-}
-
-/* Public worker badge: a crescent on a night sky, drawn from the worker's name. */
+/* Worker badge: a night sky drawn from the worker's name (crescent in public, credit moon for owners). */
 .moon-avatar--badge {
   background: var(--moon-shade);
 }
