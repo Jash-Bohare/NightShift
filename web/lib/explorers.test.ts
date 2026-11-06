@@ -36,3 +36,14 @@ describe("explorer URL builders", () => {
     );
   });
 });
+
+describe("hcsMessageUrl", () => {
+  it("links a topic sequence on the mirror node and rejects malformed ids", async () => {
+    const { hcsMessageUrl } = await import("./explorers");
+    expect(hcsMessageUrl("0.0.11129931", "42")).toBe(
+      "https://testnet.mirrornode.hedera.com/api/v1/topics/0.0.11129931/messages/42",
+    );
+    expect(hcsMessageUrl("11129931", "42")).toBeNull();
+    expect(hcsMessageUrl("0.0.1", "4x")).toBeNull();
+  });
+});

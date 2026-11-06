@@ -1,224 +1,469 @@
 "use client";
 
-import { ownerJobStatusLabel, parseOwnerJobs } from "../../lib/owner";
 import Link from "next/link";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePrivy } from "@privy-io/react-auth";
 import { formatUsdc } from "@nightshift/shared/money";
 import { Button } from "../../components/ui/Button";
 import { ChandaMama } from "../../components/ui/ChandaMama";
+import { Chip } from "../../components/ui/Chip";
+import { MoonAvatar } from "../../components/ui/MoonAvatar";
+import { Stamp } from "../../components/ui/Stamp";
+import { TicketCountdown } from "../../components/ui/TicketCountdown";
 import { EmptyPanel, ErrorPanel, LoadingPanel, PageFrame } from "../../components/Product";
+import { RecordsDrawer } from "../../components/RecordsDrawer";
+import { serverGet, serverSend } from "../../lib/api";
+import {
+  ensAppUrl,
+  etherscanTransactionUrl,
+  hashscanAccountUrl,
+  hashscanTransactionUrl,
+  hcsMessageUrl,
+} from "../../lib/explorers";
+import { atomicFromDecimal, decimalFromAtomic } from "../../lib/launch";
+import {
+  agentStatusStamp,
+  capUsedPercent,
+  formatUsdMicro,
+  ownerJobStatusLabel,
+  parseOwnerDashboard,
+  parseOwnerJobs,
+  parseOwnerPayouts,
+  type OwnerAgent,
+  type OwnerDashboard,
+} from "../../lib/owner";
 import { publicEnv } from "../../lib/public-env";
 
+type TokenFn = () => Promise<string | null>;
+
+const frame = { kicker: "Owner dashboard", title: "Your", accent: "night shift." };
+
+async function token(getToken: TokenFn): Promise<string> {
+  const t = await getToken();
+  if (!t) throw new Error("Privy did not provide an access token. Sign out and sign in again.");
+  return t;
+}
+
 export default function DashboardPage() {
-  if (!publicEnv.privyAppId) {
+  if (publicEnv.demoMode)
     return (
-      <PageFrame
-        kicker="Owner dashboard"
-        title="Your"
-        accent="night shift."
-        description="Sign in to see owner-scoped worker data."
-      >
+      <PageFrame {...frame} description="Owner dashboards run on localhost only.">
+        <ErrorPanel message="This is the hosted demo. Owner sign-in only works on localhost:3000 (0G’s Privy app allows only local origins). Public worker pages show the same on-chain data." />
+        <Link className="button button--ink" href="/directory">
+          Browse workers →
+        </Link>
+      </PageFrame>
+    );
+  if (!publicEnv.privyAppId)
+    return (
+      <PageFrame {...frame} description="Sign in to see owner-scoped worker data.">
         <ErrorPanel message="Privy is not configured in this environment. No owner information or statistics are displayed." />
       </PageFrame>
     );
-  }
   return <AuthenticatedDashboard />;
 }
 
 function AuthenticatedDashboard() {
   const { ready, authenticated, login, getAccessToken } = usePrivy();
-  const [loginError, setLoginError] = useState<string | null>(null);
-  if (!ready) {
+  if (!ready)
     return (
       <main className="wrap product-page">
         <LoadingPanel label="Checking Privy session…" />
       </main>
     );
-  }
-  if (!authenticated) {
+  if (!authenticated)
     return (
-      <PageFrame
-        kicker="Owner dashboard"
-        title="Your"
-        accent="night shift."
-        description="Your private worker roster and live ledger."
-      >
+      <PageFrame {...frame} description="Your private worker roster and live ledger.">
         <div className="dashboard-gate card hard-shadow">
           <ChandaMama variant="sleeping" />
           <h2 className="section-title">Sign in to your owner account.</h2>
-          <p>
-            Only owner-scoped API data belongs here. We will not infer your roster from public
-            agents.
-          </p>
-          <Button
-            variant="ink"
-            onClick={() => {
-              try {
-                login();
-                setLoginError(null);
-              } catch (error) {
-                setLoginError(error instanceof Error ? error.message : "Privy sign in failed.");
-              }
-            }}
-          >
+          <p>Only owner-scoped data appears here; nothing is inferred from public workers.</p>
+          <Button variant="ink" onClick={() => login()}>
             Sign in with Privy
           </Button>
-          {loginError && (
-            <p className="field-error" role="alert">
-              {loginError}
-            </p>
-          )}
           <Link className="button" href="/directory">
             Browse public workers
           </Link>
         </div>
       </PageFrame>
     );
-  }
-
-  return <OwnerDataBoundary accessToken={getAccessToken} />;
+  return <OwnerDataBoundary getToken={getAccessToken} />;
 }
 
-function OwnerDataBoundary({ accessToken }: { accessToken: () => Promise<string | null> }) {
+function OwnerDataBoundary({ getToken }: { getToken: TokenFn }) {
   const dashboard = useQuery({
     queryKey: ["owner-dashboard"],
-    queryFn: async ({ signal }) => {
-      const token = await accessToken();
-      if (!token)
-        throw new Error("Privy did not provide an access token. Sign out and sign in again.");
-      const response = await fetch(`${publicEnv.serverUrl}/me`, {
-        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-        signal,
-        cache: "no-store",
-      });
-      if (!response.ok) throw new Error(`Owner API request failed (${response.status}).`);
-      const data: unknown = await response.json();
-      if (!isOwnerDashboard(data)) throw new Error("The owner API returned an invalid response.");
-      return data;
-    },
+    queryFn: async ({ signal }) =>
+      parseOwnerDashboard(await serverGet<unknown>("/me", signal, await token(getToken))),
+    refetchInterval: 5_000,
     retry: false,
   });
 
-  if (dashboard.isPending) {
+  if (dashboard.isPending)
     return (
       <main className="wrap product-page">
-        <LoadingPanel label="Loading owner-scoped dashboard data…" />
+        <LoadingPanel label="Loading your workers…" />
       </main>
     );
-  }
-  if (dashboard.isError) {
+  if (dashboard.isError)
     return (
-      <PageFrame
-        kicker="Owner dashboard"
-        title="Your"
-        accent="night shift."
-        description="Private data is never replaced with public or sample statistics."
-      >
+      <PageFrame {...frame} description="Private data is never replaced with sample statistics.">
         <ErrorPanel message={dashboard.error.message} onRetry={() => void dashboard.refetch()} />
       </PageFrame>
     );
-  }
   const data = dashboard.data;
-  if (!data.owner)
+  if (!data.owner || data.agents.length === 0)
     return (
-      <PageFrame
-        kicker="Owner dashboard"
-        title="Your"
-        accent="night shift."
-        description="This verified account does not have a NightShift owner record yet."
-      >
+      <PageFrame {...frame} description="This account has no workers yet.">
         <EmptyPanel
-          title="No workers are registered to this account."
-          detail="The launch wizard can show requirements, but submission is unavailable until a secure owner launch API is deployed."
+          title="No workers on shift yet."
+          detail="Launch one in about two minutes: pick a skill, a name and a daily cap."
+          action={{ href: "/launch", label: "Launch a worker →" }}
         />
-        <Link className="button button--ink" href="/launch">
-          Review launch requirements →
-        </Link>
       </PageFrame>
     );
+  return <Dashboard data={data} getToken={getToken} />;
+}
 
+function Dashboard({ data, getToken }: { data: OwnerDashboard; getToken: TokenFn }) {
+  const earned = data.agents.reduce((s, a) => s + BigInt(a.today.earnedAtomic), 0n);
+  const spent = data.agents.reduce((s, a) => s + BigInt(a.today.spentUsdMicro), 0n);
+  const refused = data.agents.reduce((s, a) => s + a.today.jobsRefused, 0);
+  const [drawerAgent, setDrawerAgent] = useState<OwnerAgent | null>(null);
   return (
     <PageFrame
-      kicker="Owner dashboard"
-      title="Your"
-      accent="night shift."
-      description="Roster data is scoped to the verified Privy account. Usage and payout statistics are omitted unless the server can verify them."
+      {...frame}
+      description="Live from your workers. Refreshes every few seconds; every number links to its proof."
+      actions={<TicketCountdown compact />}
     >
-      <section className="card hard-shadow section-block">
-        <div className="kick">Verified owner</div>
-        <code className="mono">{data.owner.evmAddress}</code>
+      <section className="dash-hero card hard-shadow section-block">
+        <ChandaMama variant="sipping" />
+        <div>
+          <h2 className="section-title">
+            Your workers earned <span className="text-orange">{formatUsdc(earned)} USDC</span>{" "}
+            today.
+          </h2>
+          <p>
+            You keep 90% at payday (00:00 UTC). 0G credits used today: $
+            {formatUsdMicro(spent.toString())}.
+            {refused > 0
+              ? ` ${refused} job${refused === 1 ? "" : "s"} refused by your budget cap — buyers were not charged.`
+              : ""}
+          </p>
+          <PayoutAccount owner={data.owner!} getToken={getToken} />
+        </div>
       </section>
-      {data.agents.length === 0 ? (
-        <EmptyPanel
-          title="No workers are registered to this account."
-          detail="Review the launch requirements. The browser does not collect provider or wallet secrets."
+
+      <section className="section-block" aria-label="Your workers">
+        <div className="kick">Roster · {data.agents.length}</div>
+        <div className="dash-roster">
+          {data.agents.map((agent) => (
+            <AgentRow
+              agent={agent}
+              getToken={getToken}
+              key={agent.id}
+              onRecords={() => setDrawerAgent(agent)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <Ledger getToken={getToken} />
+      <Payouts getToken={getToken} />
+      {drawerAgent && (
+        <RecordsDrawer
+          agent={drawerAgent}
+          ownerAddress={data.owner!.evmAddress}
+          getToken={getToken}
+          onClose={() => setDrawerAgent(null)}
         />
-      ) : (
-        <section className="section-block" aria-label="Your workers">
-          <div className="kick">Your workers · {data.agents.length}</div>
-          <div className="dashboard-agent-list">
-            {data.agents.map((agent) => (
-              <Link
-                className="card hard-shadow dashboard-agent"
-                href={`/agents/${encodeURIComponent(agent.label)}`}
-                key={agent.id}
-              >
-                <strong>{agent.ensName}</strong>
-                <span className="mono">
-                  {agent.skill} · {agent.status}
-                </span>
-                <span className="mono">
-                  {formatUsdc(BigInt(agent.priceAtomic))} USDC / {agent.priceUnit}
-                </span>
-                <span className="mono">0G daily cap ${formatUsdMicro(agent.dailyCapUsdMicro)}</span>
-                <span className="mono">
-                  Registration{" "}
-                  {agent.expiry ? `expires ${agent.expiry.slice(0, 10)}` : "expiry unknown"}
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
       )}
-      <OwnerJobHistory accessToken={accessToken} />
-      <p className="small-note">
-        Pause/resume, pricing changes and payout controls are not available yet. Job outputs and
-        buyer accounts are never shown here.
-      </p>
     </PageFrame>
   );
 }
 
-function OwnerJobHistory({ accessToken }: { accessToken: () => Promise<string | null> }) {
+function PayoutAccount({
+  owner,
+  getToken,
+}: {
+  owner: NonNullable<OwnerDashboard["owner"]>;
+  getToken: TokenFn;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(owner.hederaPayoutAccount ?? "");
+  const save = useMutation({
+    mutationFn: async (account: string | null) =>
+      serverSend("/me", {
+        method: "PATCH",
+        body: { hederaPayoutAccount: account },
+        bearerToken: await token(getToken),
+      }),
+    onSuccess: async () => {
+      setEditing(false);
+      await queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] });
+    },
+  });
+  const valid = /^0\.0\.\d{1,12}$/.test(value.trim());
+  const link = owner.hederaPayoutAccount ? hashscanAccountUrl(owner.hederaPayoutAccount) : null;
+  if (!editing)
+    return (
+      <p className="mono small-note">
+        Payout account:{" "}
+        {owner.hederaPayoutAccount ? (
+          link ? (
+            <a href={link} target="_blank" rel="noreferrer noopener">
+              {owner.hederaPayoutAccount} ↗
+            </a>
+          ) : (
+            owner.hederaPayoutAccount
+          )
+        ) : (
+          <b>not set — earnings stay in each worker’s account until you add one</b>
+        )}{" "}
+        <button className="chip chip__action" type="button" onClick={() => setEditing(true)}>
+          {owner.hederaPayoutAccount ? "change" : "add"}
+        </button>
+      </p>
+    );
+  return (
+    <div className="dash-inline-form">
+      <input
+        aria-label="Hedera payout account"
+        className="form-control form-control--mono"
+        placeholder="0.0.12345"
+        spellCheck={false}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <Button
+        variant="ink"
+        disabled={!valid || save.isPending}
+        onClick={() => save.mutate(value.trim())}
+      >
+        {save.isPending ? "Checking…" : "Save"}
+      </Button>
+      {owner.hederaPayoutAccount && (
+        <Button disabled={save.isPending} onClick={() => save.mutate(null)}>
+          Remove
+        </Button>
+      )}
+      <Button disabled={save.isPending} onClick={() => setEditing(false)}>
+        Cancel
+      </Button>
+      {save.isError && (
+        <p className="field-error" role="alert">
+          {save.error.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AgentRow({
+  agent,
+  getToken,
+  onRecords,
+}: {
+  agent: OwnerAgent;
+  getToken: TokenFn;
+  onRecords: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [cap, setCap] = useState(decimalFromAtomic(BigInt(agent.dailyCapUsdMicro)));
+  const patch = useMutation({
+    mutationFn: async (body: { status?: "active" | "paused_owner"; dailyCapUsdMicro?: string }) =>
+      serverSend(`/me/agents/${encodeURIComponent(agent.id)}`, {
+        method: "PATCH",
+        body,
+        bearerToken: await token(getToken),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["owner-dashboard"] }),
+  });
+  const stamp = agentStatusStamp(agent.status);
+  const pct = capUsedPercent(agent.today.spentUsdMicro, agent.dailyCapUsdMicro);
+  const capLeft = BigInt(agent.dailyCapUsdMicro) - BigInt(agent.today.spentUsdMicro);
+  const capMicro = atomicFromDecimal(cap);
+  const capValid = capMicro !== null && capMicro > 0n && capMicro <= 1_000_000_000n;
+  const capChanged = capMicro !== null && capMicro.toString() !== agent.dailyCapUsdMicro;
+  const canPause = agent.status === "active" || agent.status === "paused_budget";
+  const canResume = agent.status === "paused_owner";
+  const registerTx = agent.registerTx ? etherscanTransactionUrl(agent.registerTx) : null;
+  const account = agent.hederaAccountId ? hashscanAccountUrl(agent.hederaAccountId) : null;
+
+  return (
+    <article className="card hard-shadow dash-agent">
+      <header className="dash-agent__head">
+        <MoonAvatar
+          creditsLeft={(capLeft > 0n ? capLeft : 0n).toString()}
+          dailyCap={agent.dailyCapUsdMicro}
+          label={agent.label}
+        />
+        <div>
+          <Link href={`/agents/${encodeURIComponent(agent.label)}`}>
+            <strong>{agent.ensName}</strong>
+          </Link>
+          <span className="mono small-note">
+            {agent.skill} · {formatUsdc(BigInt(agent.priceAtomic))} USDC / {agent.priceUnit}
+          </span>
+        </div>
+        <Stamp tone={stamp.tone} tilt="right">
+          {stamp.text}
+        </Stamp>
+      </header>
+
+      <div className="dash-agent__today">
+        <div>
+          <span className="kick">0G credits today</span>
+          <div
+            className="budget-bar"
+            role="meter"
+            aria-label="0G credits used against the daily cap"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
+          >
+            <span style={{ width: `${pct}%` }} />
+          </div>
+          <span className="mono small-note">
+            ${formatUsdMicro(agent.today.spentUsdMicro)} of $
+            {formatUsdMicro(agent.dailyCapUsdMicro)} ({pct}%)
+          </span>
+        </div>
+        <div>
+          <span className="kick">Earned today</span>
+          <strong className="text-orange">
+            {formatUsdc(BigInt(agent.today.earnedAtomic))} USDC
+          </strong>
+        </div>
+        <div>
+          <span className="kick">Jobs settled</span>
+          <strong>{agent.today.jobsSettled}</strong>
+          {agent.today.jobsRefused > 0 && (
+            <span className="mono small-note"> · {agent.today.jobsRefused} refused</span>
+          )}
+        </div>
+      </div>
+
+      {agent.status === "paused_budget" && (
+        <p className="field-error">
+          Today’s 0G cap is used up; buyers are refused before paying. It resumes automatically when
+          a job fits (after 00:00 UTC or if you raise the cap).
+        </p>
+      )}
+
+      <div className="dash-agent__controls">
+        <label className="control-label dash-cap">
+          Daily cap (USD)
+          <span className="dash-inline-form">
+            <input
+              className="form-control form-control--mono"
+              inputMode="decimal"
+              value={cap}
+              onChange={(event) => setCap(event.target.value)}
+            />
+            <Button
+              disabled={!capValid || !capChanged || patch.isPending}
+              onClick={() => capMicro && patch.mutate({ dailyCapUsdMicro: capMicro.toString() })}
+            >
+              Save
+            </Button>
+          </span>
+        </label>
+        {canPause && (
+          <Button
+            disabled={patch.isPending}
+            onClick={() => patch.mutate({ status: "paused_owner" })}
+          >
+            Pause
+          </Button>
+        )}
+        {canResume && (
+          <Button
+            variant="ink"
+            disabled={patch.isPending}
+            onClick={() => patch.mutate({ status: "active" })}
+          >
+            Resume
+          </Button>
+        )}
+        <Button disabled={!agent.resolverAddress} onClick={onRecords}>
+          Records
+        </Button>
+      </div>
+      {cap && !capValid && (
+        <p className="field-error">Use a positive amount up to $1,000 (six decimals at most).</p>
+      )}
+      {patch.isError && (
+        <p className="field-error" role="alert">
+          {patch.error.message}
+        </p>
+      )}
+      <p className="mono small-note dash-agent__links">
+        <a href={ensAppUrl(agent.ensName)} target="_blank" rel="noreferrer noopener">
+          ENS ↗
+        </a>
+        {registerTx && (
+          <>
+            {" · "}
+            <a href={registerTx} target="_blank" rel="noreferrer noopener">
+              registration tx ↗
+            </a>
+          </>
+        )}
+        {account && (
+          <>
+            {" · "}
+            <a href={account} target="_blank" rel="noreferrer noopener">
+              wallet {agent.hederaAccountId} ↗
+            </a>
+          </>
+        )}
+        {agent.expiry ? ` · name expires ${agent.expiry.slice(0, 10)}` : ""}
+      </p>
+    </article>
+  );
+}
+
+function Ledger({ getToken }: { getToken: TokenFn }) {
   const [page, setPage] = useState(1);
   const jobs = useQuery({
     queryKey: ["owner-jobs", page],
-    queryFn: async ({ signal }) => {
-      const token = await accessToken();
-      if (!token) throw new Error("Privy did not provide an access token.");
-      const response = await fetch(`${publicEnv.serverUrl}/me/jobs?page=${page}&limit=20`, {
-        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
-        signal,
-        cache: "no-store",
-      });
-      if (!response.ok) throw new Error(`Owner job history request failed (${response.status}).`);
-      return parseOwnerJobs(await response.json());
-    },
+    queryFn: async ({ signal }) =>
+      parseOwnerJobs(
+        await serverGet<unknown>(`/me/jobs?page=${page}&limit=20`, signal, await token(getToken)),
+      ),
+    refetchInterval: page === 1 ? 4_000 : false,
     retry: false,
   });
+  // Rows that appear after the first load flash (design: "new rows flash yellow").
+  const seen = useRef<Set<string> | null>(null);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!jobs.data) return;
+    const ids = jobs.data.items.map((j) => j.id);
+    if (seen.current === null) {
+      seen.current = new Set(ids);
+      return;
+    }
+    const added = ids.filter((id) => !seen.current!.has(id));
+    for (const id of ids) seen.current.add(id);
+    if (added.length) setFresh(new Set(added));
+  }, [jobs.data]);
+
   return (
-    <section className="section-block" aria-label="Your job history">
-      <div className="kick">Job history · owner-scoped</div>
+    <section className="section-block" aria-label="Job ledger">
+      <div className="kick">Ledger · live</div>
       {jobs.isPending ? (
-        <LoadingPanel label="Loading your job history…" />
+        <LoadingPanel label="Loading your job ledger…" />
       ) : jobs.isError ? (
         <ErrorPanel message={jobs.error.message} onRetry={() => void jobs.refetch()} />
       ) : jobs.data.items.length === 0 ? (
         <EmptyPanel
           title="No jobs yet."
-          detail="Jobs appear here after a buyer runs one of your workers."
+          detail="No jobs yet — run the buyer console against one of your workers."
+          action={{ href: "/console", label: "Open the buyer console →" }}
         />
       ) : (
         <div className="card hard-shadow owner-jobs">
@@ -228,24 +473,55 @@ function OwnerJobHistory({ accessToken }: { accessToken: () => Promise<string | 
                 <th>When (UTC)</th>
                 <th>Worker</th>
                 <th>Status</th>
+                <th>Units</th>
                 <th>Price</th>
                 <th>0G cost</th>
+                <th>Proof</th>
               </tr>
             </thead>
             <tbody>
-              {jobs.data.items.map((job) => (
-                <tr key={job.id}>
-                  <td>{job.createdAt.slice(0, 16).replace("T", " ")}</td>
-                  <td>{job.label}</td>
-                  <td>{ownerJobStatusLabel(job.status)}</td>
-                  <td>{formatUsdc(BigInt(job.priceAtomic))} USDC</td>
-                  <td>
-                    {job.zgCostUsdMicro === null
-                      ? "unknown"
-                      : `$${formatUsdMicro(job.zgCostUsdMicro)}`}
-                  </td>
-                </tr>
-              ))}
+              {jobs.data.items.map((job) => {
+                const tx = job.hederaTxId ? hashscanTransactionUrl(job.hederaTxId) : null;
+                const hcs =
+                  job.hcsSequence && publicEnv.hederaHcsTopicId
+                    ? hcsMessageUrl(publicEnv.hederaHcsTopicId, job.hcsSequence)
+                    : null;
+                return (
+                  <tr className={fresh.has(job.id) ? "ledger-row--new" : undefined} key={job.id}>
+                    <td>{job.createdAt.slice(0, 19).replace("T", " ")}</td>
+                    <td>{job.label}</td>
+                    <td>
+                      {job.status === "refused_budget" ? (
+                        <Stamp tone="red">REFUSED · NOT CHARGED</Stamp>
+                      ) : (
+                        ownerJobStatusLabel(job.status)
+                      )}
+                    </td>
+                    <td>{job.units}</td>
+                    <td>{formatUsdc(BigInt(job.priceAtomic))} USDC</td>
+                    <td>
+                      {job.zgCostUsdMicro === null ? "—" : `$${formatUsdMicro(job.zgCostUsdMicro)}`}
+                    </td>
+                    <td className="ledger-proof">
+                      {tx && (
+                        <Chip href={tx} rail="hedera">
+                          HashScan
+                        </Chip>
+                      )}
+                      {job.zgRequestId && (
+                        <Chip copyText={job.zgRequestId} rail="0g">
+                          0G {job.zgRequestId.slice(0, 8)}…
+                        </Chip>
+                      )}
+                      {hcs && (
+                        <Chip href={hcs} rail="hedera">
+                          HCS #{job.hcsSequence}
+                        </Chip>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <div className="owner-jobs__pager">
@@ -272,74 +548,69 @@ function OwnerJobHistory({ accessToken }: { accessToken: () => Promise<string | 
   );
 }
 
-interface OwnerAgent {
-  id: string;
-  label: string;
-  ensName: string;
-  skill: string;
-  model: string;
-  priceAtomic: string;
-  priceUnit: string;
-  dailyCapUsdMicro: string;
-  status: string;
-  expiry: string | null;
-  createdAt: string;
-}
-
-interface OwnerDashboard {
-  owner: { evmAddress: string; createdAt: string } | null;
-  agents: OwnerAgent[];
-}
-
-function isOwnerDashboard(value: unknown): value is OwnerDashboard {
-  if (typeof value !== "object" || value === null || !("owner" in value) || !("agents" in value))
-    return false;
-  const response = value as { owner: unknown; agents: unknown };
-  if (!Array.isArray(response.agents)) return false;
-  if (
-    response.owner !== null &&
-    (typeof response.owner !== "object" ||
-      response.owner === null ||
-      !("evmAddress" in response.owner) ||
-      typeof response.owner.evmAddress !== "string" ||
-      !("createdAt" in response.owner) ||
-      typeof response.owner.createdAt !== "string")
-  )
-    return false;
-  return response.agents.every(
-    (agent: unknown) =>
-      typeof agent === "object" &&
-      agent !== null &&
-      "id" in agent &&
-      typeof agent.id === "string" &&
-      "label" in agent &&
-      typeof agent.label === "string" &&
-      "ensName" in agent &&
-      typeof agent.ensName === "string" &&
-      "skill" in agent &&
-      typeof agent.skill === "string" &&
-      "model" in agent &&
-      typeof agent.model === "string" &&
-      "priceAtomic" in agent &&
-      typeof agent.priceAtomic === "string" &&
-      /^\d+$/.test(agent.priceAtomic) &&
-      "priceUnit" in agent &&
-      typeof agent.priceUnit === "string" &&
-      "dailyCapUsdMicro" in agent &&
-      typeof agent.dailyCapUsdMicro === "string" &&
-      /^\d+$/.test(agent.dailyCapUsdMicro) &&
-      "status" in agent &&
-      typeof agent.status === "string" &&
-      "expiry" in agent &&
-      (typeof agent.expiry === "string" || agent.expiry === null) &&
-      "createdAt" in agent &&
-      typeof agent.createdAt === "string",
+function Payouts({ getToken }: { getToken: TokenFn }) {
+  const payouts = useQuery({
+    queryKey: ["owner-payouts"],
+    queryFn: async ({ signal }) =>
+      parseOwnerPayouts(
+        await serverGet<unknown>("/me/payouts?limit=20", signal, await token(getToken)),
+      ),
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  return (
+    <section className="section-block" aria-label="Payouts">
+      <div className="kick">Paydays · 90% to you, 10% to Nightshift</div>
+      {payouts.isPending ? (
+        <LoadingPanel label="Loading payouts…" />
+      ) : payouts.isError ? (
+        <ErrorPanel message={payouts.error.message} onRetry={() => void payouts.refetch()} />
+      ) : payouts.data.items.length === 0 ? (
+        <EmptyPanel
+          title="No paydays yet."
+          detail="Settled earnings are paid out at 00:00 UTC to your payout account."
+        />
+      ) : (
+        <div className="card hard-shadow owner-jobs">
+          <table className="mono">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Worker</th>
+                <th>Gross</th>
+                <th>You (90%)</th>
+                <th>Fee (10%)</th>
+                <th>Status</th>
+                <th>Transfer</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payouts.data.items.map((p) => {
+                const tx = p.transactionId ? hashscanTransactionUrl(p.transactionId) : null;
+                return (
+                  <tr key={p.id}>
+                    <td>{p.payoutDate}</td>
+                    <td>{p.label}</td>
+                    <td>{formatUsdc(BigInt(p.grossAtomic))}</td>
+                    <td>{formatUsdc(BigInt(p.ownerAtomic))}</td>
+                    <td>{formatUsdc(BigInt(p.feeAtomic))}</td>
+                    <td>{p.status}</td>
+                    <td>
+                      {tx ? (
+                        <Chip href={tx} rail="hedera">
+                          HashScan
+                        </Chip>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
-}
-
-function formatUsdMicro(value: string): string {
-  const amount = BigInt(value);
-  const whole = amount / 1_000_000n;
-  const fraction = (amount % 1_000_000n).toString().padStart(6, "0");
-  return `${whole}.${fraction}`;
 }

@@ -31,3 +31,10 @@ export function etherscanTransactionUrl(transactionHash: string): string | null 
 export function ensAppUrl(name: string): string {
   return `https://app.ens.dev/${encodeURIComponent(name)}`;
 }
+
+/** One HCS message as JSON on the testnet mirror node (docs/07: GET /topics/{id}/messages/{seq}). */
+export function hcsMessageUrl(topicId: string, sequence: string): string | null {
+  return HEDERA_ID.test(topicId) && /^\d+$/.test(sequence)
+    ? `https://testnet.mirrornode.hedera.com/api/v1/topics/${topicId}/messages/${sequence}`
+    : null;
+}
