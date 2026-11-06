@@ -64,6 +64,15 @@ export const resourceServer = new x402ResourceServer(
   // Testnet USDC 0.0.429274 (6 dp) is the scheme's default asset; no override needed (docs/07).
   .register(HEDERA_NETWORK, new ExactHederaScheme())
   .onAfterVerify(async (ctx) => {
+    // x402 runs after-verify hooks for invalid results too: log the reason and claim nothing.
+    if (!ctx.result.isValid) {
+      log("x402", "verify rejected", {
+        reason: ctx.result.invalidReason,
+        message: ctx.result.invalidMessage,
+        payTo: ctx.requirements.payTo,
+      });
+      return;
+    }
     log("x402", "verified", {
       payer: ctx.result.payer,
       amount: ctx.requirements.amount,

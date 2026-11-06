@@ -32,6 +32,26 @@ export type PaidJobResponse =
       latencyMs: number;
     };
 
+/**
+ * The x402 reason carried in a 402's PAYMENT-REQUIRED header (base64 JSON with an `error`
+ * field), e.g. the facilitator's invalid reason. Empty when absent or unreadable.
+ */
+export function paymentRejection(response: Pick<Response, "status" | "headers">): string {
+  if (response.status !== 402) return "";
+  const header = response.headers.get("payment-required");
+  if (!header) return "";
+  try {
+    const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8")) as {
+      error?: unknown;
+    };
+    return typeof decoded.error === "string" && decoded.error
+      ? ` (payment rejected: ${decoded.error.slice(0, 200)})`
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 export async function executePaidJob(
   config: BuyerConfig,
   agent: VerifiedAgent,
@@ -85,7 +105,7 @@ export async function executePaidJob(
   if (!response.ok)
     return {
       kind: "submitted-unverified",
-      reason: `paid job returned HTTP ${response.status}: ${text.slice(0, 200)}`,
+      reason: `paid job returned HTTP ${response.status}${paymentRejection(response)}: ${text.slice(0, 200)}`,
     };
 
   const header = response.headers.get("PAYMENT-RESPONSE");

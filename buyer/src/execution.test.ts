@@ -158,3 +158,21 @@ describe("paid job request handling", () => {
     });
   });
 });
+
+describe("paymentRejection", () => {
+  it("reads the x402 reason from a 402 PAYMENT-REQUIRED header", async () => {
+    const { paymentRejection } = await import("./execution.js");
+    const header = Buffer.from(JSON.stringify({ error: "invalid_exact_hedera_payload" })).toString(
+      "base64",
+    );
+    const headers = new Headers({ "payment-required": header });
+    expect(paymentRejection({ status: 402, headers })).toBe(
+      " (payment rejected: invalid_exact_hedera_payload)",
+    );
+    expect(paymentRejection({ status: 500, headers })).toBe("");
+    expect(paymentRejection({ status: 402, headers: new Headers() })).toBe("");
+    expect(
+      paymentRejection({ status: 402, headers: new Headers({ "payment-required": "%%%" }) }),
+    ).toBe("");
+  });
+});
