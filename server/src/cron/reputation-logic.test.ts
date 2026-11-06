@@ -45,3 +45,22 @@ describe("needsUpdate", () => {
     );
   });
 });
+
+describe("sameReputation (directory cache vs ENS)", () => {
+  it("ignores key order and spots stale caches", async () => {
+    const { sameReputation } = await import("./reputation.js");
+    const chain = '{"jobs":8,"success":1,"p50_ms":11989,"updated":"2030-11-06T14:34:35Z"}';
+    expect(
+      sameReputation(chain, {
+        p50_ms: 11989,
+        updated: "2030-11-06T14:34:35Z",
+        jobs: 8,
+        success: 1,
+      }),
+    ).toBe(true);
+    expect(sameReputation(chain, { jobs: 5, success: 1, p50_ms: 11056, updated: "x" })).toBe(false);
+    expect(sameReputation('{"jobs":0}', null)).toBe(false);
+    expect(sameReputation(null, null)).toBe(true);
+    expect(sameReputation("not json", undefined)).toBe(true);
+  });
+});

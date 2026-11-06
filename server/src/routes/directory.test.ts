@@ -63,10 +63,11 @@ describe("directory query", () => {
     expect(labels({ status: "all" })).toHaveLength(5);
   });
   it("sorts by reputation and paginates with a total", () => {
+    // kural has 0 settled jobs: a default success of 1 is no track record, so it ranks last.
     expect(labels({ sort: "reputation", skill: "transcribe:ta" })).toEqual([
       "tamil-scribe",
-      "kural",
       "chennai-ears",
+      "kural",
     ]);
     const page2 = queryDirectory(agents, q({ limit: "2", page: "2" }));
     expect(page2.total).toBe(4);
@@ -131,5 +132,32 @@ describe("effectiveStatus", () => {
     };
     expect(queryDirectory([agent], DirectoryQuery.parse({})).total).toBe(0);
     expect(queryDirectory([agent], DirectoryQuery.parse({ status: "expired" })).total).toBe(1);
+  });
+});
+
+describe("reputation sort", () => {
+  it("ranks proven workers above new ones whatever their default success value", async () => {
+    const { queryDirectory, DirectoryQuery } = await import("./directoryLogic.js");
+    const base = {
+      ensName: "x.nightshift.eth",
+      owner: "0x",
+      resolver: "0x",
+      skill: "transcribe:ta",
+      price: { amount: "1", asset: "0.0.429274", unit: "minute" },
+      payTo: null,
+      endpoint: null,
+      model: null,
+      description: null,
+      status: "active",
+      expiry: null,
+      updatedAt: "x",
+    };
+    const agents = [
+      { ...base, label: "new-one", reputation: { jobs: 0, success: 1 } },
+      { ...base, label: "proven-95", reputation: { jobs: 20, success: 0.95 } },
+      { ...base, label: "proven-100", reputation: { jobs: 8, success: 1 } },
+    ];
+    const out = queryDirectory(agents, DirectoryQuery.parse({ sort: "reputation" }));
+    expect(out.agents.map((a) => a.label)).toEqual(["proven-100", "proven-95", "new-one"]);
   });
 });

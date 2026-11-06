@@ -152,7 +152,9 @@ export function queryDirectory(
   hits.sort((x, y) => {
     if (q.sort === "recent") return y.updatedAt.localeCompare(x.updatedAt);
     if (q.sort === "reputation") {
-      if (success(y) !== success(x)) return success(y) - success(x);
+      // A worker with no settled jobs has no track record: rank it below every proven worker.
+      const ranked = (a: DirectoryAgent) => (jobs(a) > 0 ? success(a) : -1);
+      if (ranked(y) !== ranked(x)) return ranked(y) - ranked(x);
       if (jobs(y) !== jobs(x)) return jobs(y) - jobs(x);
     } else {
       const px = price(x);
