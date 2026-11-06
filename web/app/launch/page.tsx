@@ -23,6 +23,7 @@ import {
   type LaunchResult,
 } from "../../lib/launch";
 import { publicEnv } from "../../lib/public-env";
+import { truncateMiddle } from "../../lib/truncate";
 import { formatCountdownToUtcMidnight } from "../../lib/time";
 import { useClock } from "../../lib/use-clock";
 
@@ -281,11 +282,15 @@ function LaunchWizard() {
                   >
                     {wallets.map((w) => (
                       <option key={w.address} value={w.address}>
-                        {w.address} ·{" "}
-                        {w.walletClientType === "privy" ? "Privy embedded" : w.walletClientType}
+                        {truncateMiddle(w.address)} ·{" "}
+                        {w.walletClientType === "privy"
+                          ? "Privy embedded wallet"
+                          : w.walletClientType}
                       </option>
                     ))}
                   </select>
+                  {/* The option text is shortened to fit phones; the full owner address stays visible. */}
+                  <span className="muted mono-wrap">Owner: {ownerWallet}</span>
                 </label>
               )}
               <label className="control-label">

@@ -440,20 +440,15 @@ textarea:focus-visible {
   font-size: 13px;
 }
 
+/* Wallet chip and Sign out share one height and border so the header row lines up. */
 .masthead__wallet {
-  height: 36px;
+  height: 34px;
+  border-width: 2px;
   padding-left: 4px;
 }
 
-.masthead__wallet-moon {
-  width: 24px;
-  height: 24px;
+.masthead__wallet .moon-avatar {
   border-width: 1.5px;
-  --moon-lit-percent: 60%;
-}
-
-.masthead__wallet-moon .moon-avatar__shade {
-  transform: translateX(var(--moon-lit-percent));
 }
 
 .ticket-countdown__compact {
@@ -664,12 +659,17 @@ textarea:focus-visible {
 }
 
 .form-control {
+  /* Never wider than its container: a long value (e.g. a wallet address in a <select>) must not
+     stretch the page on phones. */
+  min-width: 0;
+  max-width: 100%;
   min-height: 42px;
   border: 2px solid var(--ink);
   border-radius: 4px;
   padding: 7px 10px;
   background: var(--white);
   color: var(--ink);
+  text-overflow: ellipsis;
 }
 
 .form-control--mono {
@@ -2014,12 +2014,12 @@ textarea:focus-visible {
     width: calc(100% - 32px);
     min-height: 0;
     flex-wrap: wrap;
-    gap: 4px 12px;
-    padding-block: 8px;
+    gap: 8px 12px;
+    padding-block: 10px;
   }
 
   .masthead__brand {
-    font-size: 23px;
+    font-size: 22px;
   }
 
   .masthead__brand svg {
@@ -2027,15 +2027,29 @@ textarea:focus-visible {
     height: 30px;
   }
 
+  /* One row (four links, or two in the hosted demo), each column as wide as its label and the
+     space shared evenly between them: every link visible, aligned, none on a line of its own. */
   .masthead__nav {
+    display: grid;
     order: 3;
     width: 100%;
     flex: 1 0 100%;
-    flex-wrap: wrap;
+    grid-auto-columns: auto;
+    grid-auto-flow: column;
+    justify-content: start;
+    gap: 6px;
     margin: 0;
-    padding-bottom: 2px;
-    /* Wrap instead of a hidden-scrollbar strip so every link is visible on a phone. */
-    overflow-x: visible;
+    overflow: visible;
+  }
+
+  .masthead__link {
+    padding: 7px 8px;
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .masthead__wallet {
+    font-size: 11px;
   }
 
   .masthead__actions {
@@ -2086,9 +2100,24 @@ textarea:focus-visible {
     justify-self: start;
   }
 
+  /* minmax(0, 1fr), not 1fr: a wide child must never widen the column past the screen. */
   .two-column,
   .launch-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .step-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .step-tab {
+    border-radius: 5px 5px 0 0;
+    text-align: left;
+  }
+
+  .wizard-nav .button {
+    flex: 1 1 0;
   }
 
   .stat-grid {
@@ -2112,7 +2141,34 @@ textarea:focus-visible {
   .landing-hero {
     flex-direction: column;
     align-items: stretch;
+    gap: 24px;
     padding-top: 30px;
+  }
+
+  /* Both calls to action full width, so they line up. */
+  .landing-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* In a column, the desktop flex-basis values (560px / 370px widths) would become minimum
+     heights and leave empty bands around the mascot; size both by their content instead. */
+  .landing-copy,
+  .landing-mascot {
+    flex: 0 0 auto;
+  }
+
+  .landing-mascot .chanda-mama {
+    width: min(60%, 230px);
+  }
+
+  .landing-mascot .ticket-countdown {
+    width: 100%;
+  }
+
+  /* Labels may wrap to two lines on phones; reserve both so values line up across a row. */
+  .stat-label {
+    min-height: 2.6em;
   }
 
   .landing-copy > p {
@@ -2169,9 +2225,9 @@ textarea:focus-visible {
     display: none;
   }
 
+  /* The ID-card preview follows the form on phones, so each step starts at the top. */
   .wizard-summary {
     position: static;
-    grid-row: 1;
   }
 }
 
@@ -2437,5 +2493,35 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .ledger-row--new {
     animation: none;
+  }
+}
+
+/* Phones: share the row evenly between the links (tablets keep them left-aligned). */
+@media (max-width: 560px) {
+  .masthead__nav {
+    justify-content: space-between;
+    gap: 4px;
+  }
+}
+
+/* Small phones (≤ 380 px, e.g. 360 px Android): keep the header on two rows and the nav inside
+   the screen; the wallet chip shows its badge only (the address stays in its tooltip). */
+@media (max-width: 380px) {
+  .masthead__link {
+    padding: 6px 5px;
+    font-size: 13px;
+  }
+
+  .masthead__wallet-address {
+    display: none;
+  }
+
+  .masthead__wallet {
+    padding-right: 4px;
+  }
+
+  .step-tab {
+    padding-inline: 8px;
+    font-size: 13px;
   }
 }

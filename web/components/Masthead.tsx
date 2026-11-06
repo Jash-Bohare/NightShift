@@ -6,6 +6,7 @@ import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { publicEnv } from "../lib/public-env";
 import { truncateMiddle } from "../lib/truncate";
+import { MoonAvatar } from "./ui/MoonAvatar";
 import { TicketCountdown } from "./ui/TicketCountdown";
 
 // Hosted demo (NEXT_PUBLIC_DEMO_MODE): owner pages need localhost Privy, so they are not linked.
@@ -119,11 +120,11 @@ function PrivyControls() {
     <span className="masthead__auth">
       {authenticated ? (
         <>
-          <span className="chip masthead__wallet">
-            <span className="moon-avatar masthead__wallet-moon" aria-hidden="true">
-              <span className="moon-avatar__shade" />
+          <span className="chip masthead__wallet" title={walletAddress ?? undefined}>
+            <MoonAvatar size={24} seed={walletAddress ?? "wallet"} />
+            <span className="masthead__wallet-address">
+              {walletAddress ? truncateMiddle(walletAddress) : "Wallet unavailable"}
             </span>
-            {walletAddress ? truncateMiddle(walletAddress) : "Wallet unavailable"}
           </span>
           <button
             className="button button--small"
