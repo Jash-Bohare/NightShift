@@ -1,16 +1,28 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
-
-const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { publicEnv } from "../lib/public-env";
 
 export function Providers({ children }: { children: ReactNode }) {
-  // Without an app id Privy can't initialise; the page explains what to set.
-  if (!PRIVY_APP_ID) return <>{children}</>;
-  return (
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            refetchOnWindowFocus: false,
+            retry: 1,
+            staleTime: 10_000,
+          },
+        },
+      }),
+  );
+
+  const app = publicEnv.privyAppId ? (
     <PrivyProvider
-      appId={PRIVY_APP_ID}
+      appId={publicEnv.privyAppId}
       config={{
         loginMethods: ["email", "wallet"],
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" } },
@@ -18,5 +30,9 @@ export function Providers({ children }: { children: ReactNode }) {
     >
       {children}
     </PrivyProvider>
+  ) : (
+    children
   );
+
+  return <QueryClientProvider client={queryClient}>{app}</QueryClientProvider>;
 }

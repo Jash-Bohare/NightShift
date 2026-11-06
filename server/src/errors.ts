@@ -1,6 +1,7 @@
 // Typed errors for external calls and API responses (docs/04 § API error codes).
 export type ApiErrorCode =
   | "unauthorized"
+  | "forbidden"
   | "label_taken"
   | "invalid_label"
   | "invalid_zg_key"
@@ -10,6 +11,7 @@ export type ApiErrorCode =
   | "no_credits"
   | "units_mismatch"
   | "agent_paused"
+  | "feature_disabled"
   | "zg_unavailable"
   | "rate_limited"
   | "internal";

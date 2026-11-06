@@ -58,6 +58,8 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
   if (!(await available(label)))
     throw new ApiError(409, "label_taken", `${label}.${ENS_PARENT_NAME} is taken`);
   const existing = await db.from("agents").select("id,status").eq("label", label).maybeSingle();
+  if (existing.error)
+    throw new UpstreamError("db", `check launch label: ${existing.error.message}`);
   if (existing.data)
     throw new ApiError(
       409,
@@ -80,9 +82,7 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
       `0G key test failed: ${err instanceof Error ? err.message : err}`,
     );
   }
-
   const ensName = `${label}.${ENS_PARENT_NAME}`;
-  const account = await createAgentAccount(`nightshift ${ensName}`);
   const ownerId = await upsertOwner(input.owner);
 
   const ins = await db
@@ -97,21 +97,47 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
       price_unit: skill.unit,
       daily_cap_usd_micro: input.dailyCapUsdMicro.toString(),
       status: "pending",
-      hedera_account_id: account.accountId,
     })
     .select("id")
     .single();
   if (ins.error) throw new UpstreamError("db", `insert agent: ${ins.error.message}`);
   const agentId = (ins.data as { id: string }).id;
 
-  const sec = await db.from("agent_secrets").insert({
-    agent_id: agentId,
-    zg_api_key_enc: encrypt(input.zgApiKey, env.SECRETS_MASTER_KEY),
-    zg_mgmt_key_enc: input.zgMgmtKey ? encrypt(input.zgMgmtKey, env.SECRETS_MASTER_KEY) : null,
-    hedera_private_key_enc: encrypt(account.privateKeyHex, env.SECRETS_MASTER_KEY),
-  });
-  if (sec.error) throw new UpstreamError("db", `insert secrets: ${sec.error.message}`);
+  let account: Awaited<ReturnType<typeof createAgentAccount>>;
+  try {
+    account = await createAgentAccount(`nightshift ${ensName}`);
+    const accountUpdate = await db
+      .from("agents")
+      .update({ hedera_account_id: account.accountId })
+      .eq("id", agentId)
+      .select("id")
+      .maybeSingle();
+    const secrets = await db.from("agent_secrets").insert({
+      agent_id: agentId,
+      zg_api_key_enc: encrypt(input.zgApiKey, env.SECRETS_MASTER_KEY),
+      zg_mgmt_key_enc: input.zgMgmtKey ? encrypt(input.zgMgmtKey, env.SECRETS_MASTER_KEY) : null,
+      hedera_private_key_enc: encrypt(account.privateKeyHex, env.SECRETS_MASTER_KEY),
+    });
+    if (secrets.error)
+      throw new UpstreamError("db", `insert secrets for ${agentId}: ${secrets.error.message}`);
+    if (accountUpdate.error || !accountUpdate.data)
+      throw new UpstreamError(
+        "db",
+        `persist Hedera account for ${agentId}: ${accountUpdate.error?.message ?? "agent row missing"}`,
+      );
+  } catch (error) {
+    const failed = await db.from("agents").update({ status: "failed" }).eq("id", agentId);
+    if (failed.error)
+      logError(
+        "db",
+        `launch ${agentId} failed before ENS registration; status update failed`,
+        failed.error,
+      );
+    throw error;
+  }
 
+  let registrationAttempted = false;
+  let registration: Awaited<ReturnType<typeof registerAgent>> | undefined;
   try {
     const records = buildInitialRecords({
       label,
@@ -125,33 +151,54 @@ export async function launchAgent(input: LaunchInput): Promise<LaunchResult> {
       serverUrl: env.PUBLIC_SERVER_URL,
       webUrl: env.PUBLIC_WEB_URL,
     });
-    const reg = await registerAgent(label, input.owner.evmAddress, records);
+    registrationAttempted = true;
+    registration = await registerAgent(label, input.owner.evmAddress, records);
     const upd = await db
       .from("agents")
       .update({
         status: "active",
-        resolver_address: reg.resolver,
-        register_tx: reg.txHash,
-        expiry: reg.expiry.toISOString(),
+        resolver_address: registration.resolver,
+        register_tx: registration.txHash,
+        expiry: registration.expiry.toISOString(),
       })
-      .eq("id", agentId);
-    if (upd.error) throw new UpstreamError("db", `activate agent: ${upd.error.message}`);
+      .eq("id", agentId)
+      .select("id")
+      .maybeSingle();
+    if (upd.error || !upd.data)
+      throw new UpstreamError(
+        "db",
+        `activate registered agent ${agentId}: ${upd.error?.message ?? "agent row missing"}`,
+      );
     log("server", "agent launched", {
       ensName,
       agentId,
       hedera: account.accountId,
-      tx: etherscanTx(reg.txHash),
+      tx: etherscanTx(registration.txHash),
     });
     return {
       agentId,
       ensName,
-      registerTx: reg.txHash,
-      resolver: reg.resolver,
+      registerTx: registration.txHash,
+      resolver: registration.resolver,
       hederaAccount: account.accountId,
     };
   } catch (err) {
-    logError("ens", `launch of ${ensName} failed; agent row marked failed`, err);
-    await db.from("agents").update({ status: "failed" }).eq("id", agentId);
+    logError("ens", `launch of ${ensName} failed; manual reconciliation may be required`, err);
+    const patch = registrationAttempted
+      ? {
+          status: "pending",
+          ...(registration
+            ? {
+                resolver_address: registration.resolver,
+                register_tx: registration.txHash,
+                expiry: registration.expiry.toISOString(),
+              }
+            : {}),
+        }
+      : { status: "failed" };
+    const result = await db.from("agents").update(patch).eq("id", agentId);
+    if (result.error)
+      logError("db", `launch ${agentId} recovery status update failed`, result.error);
     throw err;
   }
 }

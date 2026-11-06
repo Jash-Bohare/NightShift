@@ -3,19 +3,21 @@ import { createPublicClient, http } from "viem";
 import { sepolia } from "viem/chains";
 import { env } from "./config.js";
 import { db } from "./db/client.js";
+import { log } from "./log.js";
 
 type Check = { ok: boolean; ms: number; detail?: string };
 
-async function timed(fn: () => Promise<string | undefined>): Promise<Check> {
+async function timed(name: string, fn: () => Promise<string | undefined>): Promise<Check> {
   const t0 = performance.now();
   try {
     const detail = await fn();
     return { ok: true, ms: Math.round(performance.now() - t0), ...(detail ? { detail } : {}) };
-  } catch (err) {
+  } catch {
+    log("server", `health check ${name} unavailable`);
     return {
       ok: false,
       ms: Math.round(performance.now() - t0),
-      detail: err instanceof Error ? err.message : String(err),
+      detail: "unavailable",
     };
   }
 }
@@ -31,18 +33,32 @@ const sepoliaClient = createPublicClient({
   transport: http(env.SEPOLIA_RPC_URL, { timeout: 5_000 }),
 });
 
-export async function health() {
+let cached: { at: number; value: Promise<Awaited<ReturnType<typeof runChecks>>> } | undefined;
+const HEALTH_CACHE_MS = 15_000;
+
+/** Readiness, cached for 15 s so public probes cannot amplify upstream (0G/RPC/DB) traffic. */
+export function health() {
+  const now = Date.now();
+  if (!cached || now - cached.at >= HEALTH_CACHE_MS) cached = { at: now, value: runChecks() };
+  return cached.value;
+}
+
+async function runChecks() {
   const [zg, hedera, sepoliaCheck, supabase] = await Promise.all([
-    timed(async () => {
+    timed("0g", async () => {
       await getOk(`${env.ZG_ROUTER_URL}/models`, { Authorization: `Bearer ${env.ZG_TEAM_SK_KEY}` });
       return undefined;
     }),
-    timed(async () => {
+    timed("hedera", async () => {
       await getOk(`${env.HEDERA_MIRROR_URL}/api/v1/topics/${env.HEDERA_HCS_TOPIC_ID}`);
       return undefined;
     }),
-    timed(async () => `block ${await sepoliaClient.getBlockNumber()}`),
-    timed(async () => {
+    timed("sepolia", async () => {
+      const chainId = await sepoliaClient.getChainId();
+      if (chainId !== 11155111) throw new Error("unexpected chain id");
+      return `block ${await sepoliaClient.getBlockNumber()}`;
+    }),
+    timed("supabase", async () => {
       const r = await db.from("agents").select("id", { count: "exact", head: true });
       if (r.error) throw new Error(r.error.message);
       return `${r.count ?? 0} agents`;

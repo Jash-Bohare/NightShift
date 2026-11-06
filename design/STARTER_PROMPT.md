@@ -16,7 +16,7 @@ How to work:
 - Never guess an SDK API. Check the package's types in `node_modules` (or existing usage in `server/`, `buyer/`, `scripts/spikes/`) before using it.
 - Every value on screen comes from the server, Supabase, ENS or the chain. No hard-coded demo values. Money only through `formatUsdc` / a bigint micro-USD formatter, never floats.
 - Secrets never go into `web/`; it reads only `NEXT_PUBLIC_*` from `web/.env.local`.
-- Never call `GET /buyer-console/run` from tests or loops: it spends real test USDC. Use the recorded-run fixture described in HANDOFF section 7.
+- Never call `POST /buyer-console/run` from tests or loops: it spends real test USDC. Use the recorded-run fixture described in HANDOFF section 7.
 - `web/` must run on port 3000.
 - If something in the handoff is wrong in practice or you need a decision, a key or an account, stop and ask me instead of working around it.
 

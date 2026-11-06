@@ -17,8 +17,27 @@ import { hashscanTx } from "../hedera/client.js";
 import { submitHcs } from "../hedera/hcs.js";
 import { log, logError } from "../log.js";
 import { parseDeclaredUnits, priceFor } from "../pricing.js";
+import { claimVerifiedQuote, failQuoteJob, settleQuoteJob } from "../quote-redemptions.js";
+import { verifySignedQuote } from "../quote-signing.js";
+import { recordSettlementRecovery } from "../cron/settlements.js";
 
 export const RUN_ROUTE = "POST /a/:label/run";
+
+/**
+ * A facilitator SettleError with no transaction is a definite refusal (nothing was submitted).
+ * A SettleError that carries a transaction (e.g. settlement pending), a timeout, a network error
+ * or an unparseable response may hide a submitted payment: it is "uncertain" and must be
+ * reconciled against Hedera, never retried automatically.
+ */
+export function classifySettlementFailure(error: unknown): "definite" | "uncertain" {
+  if (
+    error instanceof Error &&
+    error.name === "SettleError" &&
+    !(error as { transaction?: unknown }).transaction
+  )
+    return "definite";
+  return "uncertain";
+}
 export const JOB_HEADER = "X-Nightshift-Job";
 
 function labelFromPath(path: string): string {
@@ -50,6 +69,51 @@ export const resourceServer = new x402ResourceServer(
       amount: ctx.requirements.amount,
       payTo: ctx.requirements.payTo,
     });
+    const transport = ctx.transportContext as HTTPTransportContext | undefined;
+    const token = transport?.request.adapter.getHeader("x-nightshift-quote");
+    if (!token)
+      return { abort: true, reason: "missing_signed_quote", message: "signed quote required" };
+    try {
+      const quote = verifySignedQuote(token, env.NIGHTSHIFT_QUOTE_VERIFY_PUBLIC_KEY);
+      const requestPath = transport?.request.path ?? "";
+      const matchedPath = /^\/a\/([^/]+)\/run$/.exec(requestPath);
+      if (!matchedPath || decodeURIComponent(matchedPath[1]!) !== quote.label)
+        return {
+          abort: true,
+          reason: "quote_worker_mismatch",
+          message: "signed quote does not match the requested worker",
+        };
+      if (
+        quote.network !== ctx.requirements.network ||
+        quote.asset !== ctx.requirements.asset ||
+        quote.amount !== ctx.requirements.amount ||
+        quote.payTo !== ctx.requirements.payTo
+      )
+        return {
+          abort: true,
+          reason: "quote_payment_mismatch",
+          message: "verified payment requirements do not match the signed quote",
+        };
+      const agent = await agentByLabel(quote.label, true);
+      if (
+        !agent ||
+        agent.id !== quote.agentId ||
+        agent.ens_name !== quote.ensName ||
+        !(await claimVerifiedQuote(quote, token, agent.id))
+      )
+        return {
+          abort: true,
+          reason: "quote_nonce_replayed",
+          message: "signed quote is invalid, changed, or already used",
+        };
+    } catch (error) {
+      logError("x402", "signed quote claim failed", error);
+      return {
+        abort: true,
+        reason: "quote_claim_failed",
+        message: "signed quote could not be claimed",
+      };
+    }
   })
   .onAfterSettle(async (ctx) => {
     const jobId = jobIdFrom(ctx.transportContext);
@@ -62,8 +126,21 @@ export const resourceServer = new x402ResourceServer(
         hedera_tx_id: tx,
         buyer_account: ctx.result.payer ?? null,
       });
+      await settleQuoteJob(jobId);
     } catch (err) {
-      return logError("db", `job ${jobId} settled on-chain but row update failed`, err);
+      logError("db", `job ${jobId} settled on-chain but row update failed`, err);
+      try {
+        await recordSettlementRecovery({
+          jobId,
+          desiredStatus: "settled",
+          transactionId: tx,
+          payerAccount: ctx.result.payer ?? null,
+          amountAtomic: ctx.requirements.amount,
+          asset: ctx.requirements.asset,
+        });
+      } catch (recoveryError) {
+        logError("db", `job ${jobId} settlement recovery could not be persisted`, recoveryError);
+      }
     }
     // The HCS log must not delay or fail the buyer's response; record it in the background.
     void logJobToHcs(
@@ -76,12 +153,37 @@ export const resourceServer = new x402ResourceServer(
   })
   .onSettleFailure(async (ctx) => {
     const jobId = jobIdFrom(ctx.transportContext);
-    logError("x402", `settle failed for job ${jobId ?? "?"}`, ctx.error);
-    if (jobId)
-      await updateJob(jobId, {
-        status: "settle_failed",
-        error: ctx.error.message.slice(0, 500),
-      }).catch(() => {});
+    const outcome = classifySettlementFailure(ctx.error);
+    logError("x402", `settle ${outcome} for job ${jobId ?? "?"}`, ctx.error);
+    if (jobId) {
+      const desiredStatus = outcome === "definite" ? "settle_failed" : "needs_reconciliation";
+      let recoveryNeeded = false;
+      try {
+        await updateJob(jobId, {
+          status: desiredStatus,
+          error:
+            outcome === "definite"
+              ? "payment settlement failed"
+              : "settlement outcome unknown; reconcile against Hedera before any retry",
+        });
+      } catch (err) {
+        recoveryNeeded = true;
+        logError("db", `job ${jobId} settlement failure update`, err);
+      }
+      try {
+        await failQuoteJob(jobId);
+      } catch (err) {
+        recoveryNeeded = true;
+        logError("db", `quote redemption failure for job ${jobId}`, err);
+      }
+      if (recoveryNeeded) {
+        try {
+          await recordSettlementRecovery({ jobId, desiredStatus });
+        } catch (err) {
+          logError("db", `job ${jobId} failure recovery could not be persisted`, err);
+        }
+      }
+    }
   })
   .onVerifiedPaymentCanceled(async (ctx) => {
     log("x402", "settlement cancelled", { reason: ctx.reason, status: ctx.responseStatus });
@@ -94,9 +196,16 @@ async function logJobToHcs(
   payer: string,
   tx: string,
 ): Promise<void> {
+  if (!env.HCS_SUBMIT_ENABLED) {
+    log("hedera", "HCS submission disabled (HCS_SUBMIT_ENABLED=false); job not logged", {
+      job: jobId,
+    });
+    return;
+  }
   try {
     const job = await jobById(jobId);
     if (!job) throw new Error("job row missing");
+    if (!job.output_sha256) throw new Error("job output digest missing");
     const agent = await ensNameOf(job.agent_id);
     const seq = await submitHcs({
       v: 1,
@@ -108,6 +217,7 @@ async function logJobToHcs(
       asset,
       payer,
       tx,
+      output_sha256: job.output_sha256,
       zg_request_id: job.zg_request_id,
       zg_provider: job.zg_provider,
       ts: new Date().toISOString(),

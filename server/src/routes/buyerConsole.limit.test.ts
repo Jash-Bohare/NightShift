@@ -20,6 +20,9 @@ vi.mock("@nightshift/buyer", () => ({
 vi.mock("../db/client.js", () => ({
   db: { from: () => ({ insert: () => Promise.resolve({ error: null }) }) },
 }));
+vi.mock("../buyer-console-auth.js", () => ({
+  authorizeBuyerConsole: vi.fn(async () => "did:privy:testuser"),
+}));
 
 const { buyerConsoleRouter } = await import("./buyerConsole.js");
 
@@ -42,11 +45,17 @@ describe("buyer console run limits", () => {
   });
 
   it("streams a run, refuses a concurrent one, then rate-limits for 20 s", async () => {
-    const first = await fetch(`${base}/buyer-console/run`);
+    const first = await fetch(`${base}/buyer-console/run`, {
+      method: "POST",
+      headers: { authorization: "Bearer test-token" },
+    });
     expect(first.status).toBe(200);
     expect(first.headers.get("content-type")).toContain("text/event-stream");
 
-    const concurrent = await fetch(`${base}/buyer-console/run`);
+    const concurrent = await fetch(`${base}/buyer-console/run`, {
+      method: "POST",
+      headers: { authorization: "Bearer test-token" },
+    });
     expect(concurrent.status).toBe(429);
     expect(((await concurrent.json()) as { message: string }).message).toMatch(/in progress/);
 
@@ -55,7 +64,10 @@ describe("buyer console run limits", () => {
     expect(body).toContain("event: plan");
     expect(body).toContain('event: complete\ndata: {"success":true,"chosen":"fake.nightshift.eth"');
 
-    const tooSoon = await fetch(`${base}/buyer-console/run`);
+    const tooSoon = await fetch(`${base}/buyer-console/run`, {
+      method: "POST",
+      headers: { authorization: "Bearer test-token" },
+    });
     expect(tooSoon.status).toBe(429);
     expect(((await tooSoon.json()) as { message: string }).message).toMatch(/one run per 20 s/);
   });

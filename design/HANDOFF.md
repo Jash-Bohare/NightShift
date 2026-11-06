@@ -26,7 +26,7 @@ This is the full brief for building `web/` (Phase 4). The approved visual direct
    - Sepolia tx / address: `https://sepolia.etherscan.io/tx/<hash>`, `/address/<addr>`
    - ENS name: `https://app.ens.dev/<name>`
    - 0G request id: copy only (no explorer)
-6. **Do not call `GET /buyer-console/run` in automated tests.** It spends real test USDC and 0G credits. Tests use recorded events (see section 7).
+6. **Do not call `POST /buyer-console/run` in automated tests.** It spends real test USDC and 0G credits. Tests use recorded events (see section 7).
 7. Never `git push` without Jash saying so. Conventional Commits, one task per commit. Do not commit anything with a date in it.
 
 ## 3. Design system
@@ -92,7 +92,7 @@ Server: `NEXT_PUBLIC_SERVER_URL` (default `http://localhost:8787`). Existing end
 | GET | `/directory/:name` | one entry |
 | GET | `/agents/:label` | db row + live ENS records + today's earnings |
 | GET | `/a/:label/quote?units=n` | `{amount, asset, network, payTo, unit}` |
-| GET | `/buyer-console/run?skill=transcribe:ta` | **SSE**, spends funds; events `plan, discover, verify, decide, quote, refused, payment_failed, paid, result, error`, then `complete`. One run at a time, 20 s apart (429 otherwise). Event shapes: `BuyerEvent` in `@nightshift/shared` |
+| POST | `/buyer-console/run?skill=transcribe:ta` | **SSE**, spends funds; requires an allow-listed Privy bearer token. Events `plan, discover, verify, decide, quote, refused, payment_failed, paid, result, error`, then `complete`. One run at a time, 20 s apart (429 otherwise). Event shapes: `BuyerEvent` in `@nightshift/shared` |
 | GET | `/buyer-console/budget` | buyer's spending rules and today's spend |
 
 Supabase (anon, read-only): tables `agents`, `jobs` (status `settled` / `refused_budget` / …, `price_atomic`, `zg_cost_usd_micro`, `hedera_tx_id`, `zg_request_id`, `hcs_sequence`, `latency_ms`, `created_at`), `payouts`. Realtime is enabled on `jobs`, `payouts`, `agents`.

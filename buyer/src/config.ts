@@ -12,16 +12,19 @@ export const DEFAULT_SAMPLE_FILE = fileURLToPath(
   new URL("../samples/tamil-90s.mp3", import.meta.url),
 );
 
-export interface BuyerConfig {
+export interface BuyerPublicConfig {
   serverUrl: string;
-  buyerAccountId: string;
-  buyerPrivateKey: string;
+  quoteVerifyPublicKey: string;
   sepoliaRpcUrl: string;
   registrarAddress: Address;
-  zgRouterUrl: string;
-  /** Buyer's own 0G key; falls back to the team key when BUYER_ZG_SK_KEY is empty. */
-  zgApiKey: string;
-  zgChatModel: string;
+  userRegistryAddress: Address;
+  mirrorUrl: string;
+  hcsTopicId?: string;
+}
+
+export interface BuyerConfig extends BuyerPublicConfig {
+  buyerAccountId: string;
+  buyerPrivateKey: string;
 }
 
 function need(name: string): string {
@@ -30,18 +33,62 @@ function need(name: string): string {
   return v;
 }
 
-export function loadBuyerConfig(overrides: Partial<BuyerConfig> = {}): BuyerConfig {
+function requireHttpUrl(name: string, value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name} must be an absolute HTTP(S) URL`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:")
+    throw new Error(`${name} must be an absolute HTTP(S) URL`);
+  return value;
+}
+
+export function loadBuyerPublicConfig(
+  overrides: Partial<BuyerPublicConfig> = {},
+): BuyerPublicConfig {
   const deployment = JSON.parse(readFileSync(DEPLOYMENT_PATH, "utf8")) as {
     nightshiftRegistrar: Address;
+    userRegistry: Address;
   };
+  const serverUrl = requireHttpUrl(
+    "BUYER_SERVER_URL",
+    overrides.serverUrl ?? need("BUYER_SERVER_URL"),
+  );
+  const quoteVerifyPublicKey =
+    overrides.quoteVerifyPublicKey ?? need("NIGHTSHIFT_QUOTE_VERIFY_PUBLIC_KEY");
+  const mirrorUrl = requireHttpUrl(
+    "HEDERA_MIRROR_URL",
+    overrides.mirrorUrl ?? need("HEDERA_MIRROR_URL"),
+  );
+  const sepoliaRpcUrl = requireHttpUrl(
+    "SEPOLIA_RPC_URL",
+    overrides.sepoliaRpcUrl ?? need("SEPOLIA_RPC_URL"),
+  );
   return {
-    serverUrl: overrides.serverUrl ?? need("BUYER_SERVER_URL"),
-    buyerAccountId: overrides.buyerAccountId ?? need("BUYER_HEDERA_ACCOUNT_ID"),
-    buyerPrivateKey: overrides.buyerPrivateKey ?? need("BUYER_HEDERA_PRIVATE_KEY"),
-    sepoliaRpcUrl: overrides.sepoliaRpcUrl ?? need("SEPOLIA_RPC_URL"),
+    serverUrl: serverUrl.replace(/\/+$/, ""),
+    quoteVerifyPublicKey,
+    sepoliaRpcUrl,
     registrarAddress: overrides.registrarAddress ?? deployment.nightshiftRegistrar,
-    zgRouterUrl: overrides.zgRouterUrl ?? need("ZG_ROUTER_URL"),
-    zgApiKey: overrides.zgApiKey ?? (process.env.BUYER_ZG_SK_KEY || need("ZG_TEAM_SK_KEY")),
-    zgChatModel: overrides.zgChatModel ?? need("ZG_CHAT_MODEL"),
+    userRegistryAddress: overrides.userRegistryAddress ?? deployment.userRegistry,
+    mirrorUrl: mirrorUrl.replace(/\/+$/, ""),
+    ...((overrides.hcsTopicId ?? process.env.HEDERA_HCS_TOPIC_ID)
+      ? { hcsTopicId: overrides.hcsTopicId ?? process.env.HEDERA_HCS_TOPIC_ID }
+      : {}),
+  };
+}
+
+export function loadBuyerConfig(overrides: Partial<BuyerConfig> = {}): BuyerConfig {
+  const publicConfig = loadBuyerPublicConfig(overrides);
+  const accountId = overrides.buyerAccountId ?? need("BUYER_HEDERA_ACCOUNT_ID");
+  if (!/^0\.0\.\d+$/.test(accountId)) throw new Error("BUYER_HEDERA_ACCOUNT_ID is invalid");
+  const privateKey = overrides.buyerPrivateKey ?? need("BUYER_HEDERA_PRIVATE_KEY");
+  if (!/^(?:0x)?[0-9a-fA-F]{64}$/.test(privateKey))
+    throw new Error("BUYER_HEDERA_PRIVATE_KEY must be a 32-byte ECDSA private key");
+  return {
+    ...publicConfig,
+    buyerAccountId: accountId,
+    buyerPrivateKey: privateKey,
   };
 }

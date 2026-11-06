@@ -4,7 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./buyerEvents": "./src/buyerEvents.ts",
+    "./constants": "./src/constants.ts",
+    "./money": "./src/money.ts",
+    "./registrarAbi": "./src/registrarAbi.ts",
+    "./userRegistryAbi": "./src/userRegistryAbi.ts"
   },
   "scripts": {
     "typecheck": "tsc -p ."

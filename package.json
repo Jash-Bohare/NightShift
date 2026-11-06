@@ -11,7 +11,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --if-present typecheck",
-    "db:push": "supabase db push"
+    "db:push": "supabase db push",
+    "test:all": "pnpm -C buyer test && pnpm -C server test && pnpm -C web test",
+    "dev:simulated": "pnpm -C server dev:simulated",
+    "simulate:buyer": "pnpm -C server simulate:buyer"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

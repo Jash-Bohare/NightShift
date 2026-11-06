@@ -11,6 +11,25 @@ export type BudgetDecision =
     }
   | { ok: false; reason: "no_credits"; estimateUsdMicro: bigint; balanceUsdMicro: bigint };
 
+export interface RecordedJobCost {
+  id: string;
+  status: string;
+  zg_cost_usd_micro: string | number | null;
+}
+
+export function sumRecordedCosts(rows: RecordedJobCost[]): bigint {
+  return rows.reduce((sum, row) => {
+    if (row.status === "refused_budget") return sum;
+    const cost = row.zg_cost_usd_micro;
+    if (cost === null) throw new Error(`job ${row.id} has no recorded 0G cost`);
+    if (typeof cost === "number" && (!Number.isSafeInteger(cost) || cost < 0))
+      throw new Error(`job ${row.id} has an unsafe 0G cost`);
+    if (typeof cost === "string" && !/^\d+$/.test(cost))
+      throw new Error(`job ${row.id} has a malformed 0G cost`);
+    return sum + BigInt(cost);
+  }, 0n);
+}
+
 /** 00:00:00.000 UTC of the day containing `now`. */
 export function utcDayStart(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));

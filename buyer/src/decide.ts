@@ -14,6 +14,9 @@ export interface EnsPrice {
 export interface VerifiedAgent {
   label: string;
   ensName: string;
+  owner: string;
+  resolver: string;
+  expiry: string;
   skill: string;
   price: EnsPrice;
   payTo: string;
@@ -53,11 +56,12 @@ export function parseReputation(text: string | null | undefined): AgentReputatio
   try {
     const j = JSON.parse(text) as Record<string, unknown>;
     const jobs = typeof j.jobs === "number" ? j.jobs : null;
-    if (jobs === null || jobs < 0) return null;
+    if (jobs === null || !Number.isSafeInteger(jobs) || jobs < 0) return null;
     // The registrar writes {"jobs":0} at registration: no history yet counts as success 1.
     const success = typeof j.success === "number" ? j.success : jobs === 0 ? 1 : null;
     if (success === null || success < 0 || success > 1) return null;
     const p50 = typeof j.p50_ms === "number" ? j.p50_ms : 0;
+    if (!Number.isFinite(p50) || p50 < 0) return null;
     return {
       jobs,
       success,
@@ -70,7 +74,7 @@ export function parseReputation(text: string | null | undefined): AgentReputatio
 }
 
 export function isValidPayTo(payTo: string | null | undefined): payTo is string {
-  return !!payTo && HEDERA_ID.test(payTo);
+  return !!payTo && HEDERA_ID.test(payTo) && BigInt(payTo.slice(4)) > 0n;
 }
 
 /** The ENS name must be exactly `<label>.<parent>` for an allowed parent namespace. */

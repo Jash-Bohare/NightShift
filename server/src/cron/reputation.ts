@@ -18,6 +18,27 @@ export interface ReputationOutcome {
 
 let running = false;
 
+export async function loadAgentReputationJobs(
+  agentId: string,
+  pageSize = 1000,
+): Promise<{ status: JobStatus; latency_ms: number | null }[]> {
+  const all: { status: JobStatus; latency_ms: number | null }[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const result = await db
+      .from("jobs")
+      .select("status,latency_ms")
+      .eq("agent_id", agentId)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (result.error)
+      throw new UpstreamError("db", `reputation jobs for ${agentId}: ${result.error.message}`);
+    const page = (result.data ?? []) as { status: JobStatus; latency_ms: number | null }[];
+    all.push(...page);
+    if (page.length < pageSize) return all;
+  }
+}
+
 export async function runReputationBatch(now = new Date()): Promise<ReputationOutcome[]> {
   if (running) {
     log("cron", "reputation batch already running, skipping");
@@ -33,12 +54,8 @@ export async function runReputationBatch(now = new Date()): Promise<ReputationOu
     const out: ReputationOutcome[] = [];
     for (const a of agents.data as { id: string; label: string; ens_name: string }[]) {
       try {
-        const jobs = await db.from("jobs").select("status,latency_ms").eq("agent_id", a.id);
-        if (jobs.error) throw new UpstreamError("db", jobs.error.message);
-        const rep = computeReputation(
-          jobs.data as { status: JobStatus; latency_ms: number | null }[],
-          now,
-        );
+        const jobs = await loadAgentReputationJobs(a.id);
+        const rep = computeReputation(jobs, now);
         const json = JSON.stringify(rep);
         const onChain = await sepoliaClient.getEnsText({
           name: normalize(a.ens_name),

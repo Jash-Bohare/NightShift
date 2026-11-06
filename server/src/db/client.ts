@@ -4,16 +4,24 @@ import WebSocket from "ws";
 import { env } from "../config.js";
 import { UpstreamError } from "../errors.js";
 
-export const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-  // supabase-js 2.119 builds a Realtime client eagerly and Node 20 has no native
-  // WebSocket. The server never subscribes; this only satisfies the constructor.
-  realtime: { transport: WebSocket as never },
-  global: {
-    fetch: (input, init) =>
-      fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(10_000) }),
-  },
-});
+function createServiceClient() {
+  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    // supabase-js 2.119 builds a Realtime client eagerly and Node 20 has no native
+    // WebSocket. The server never subscribes; this only satisfies the constructor.
+    realtime: { transport: WebSocket as never },
+    global: {
+      fetch: (input, init) =>
+        fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(10_000) }),
+    },
+  });
+}
+
+// NIGHTSHIFT_SIMULATION (refused in production by config) swaps in the in-memory database used
+// by the local simulated stack; every other environment uses the Supabase service-role client.
+export const db: ReturnType<typeof createServiceClient> = env.NIGHTSHIFT_SIMULATION
+  ? ((await import("../testing/fake-supabase.js")).simulatedDatabase() as never)
+  : createServiceClient();
 
 /** Unwrap a supabase-js result, throwing a typed error on failure. */
 export function must<T>(what: string, r: { data: T | null; error: { message: string } | null }): T {

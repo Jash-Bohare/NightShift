@@ -4,10 +4,33 @@ import { env } from "../config.js";
 import { UpstreamError } from "../errors.js";
 import { log } from "../log.js";
 
+export interface ZgBilling {
+  currency?: unknown;
+  input_cost?: unknown;
+  output_cost?: unknown;
+  total_cost?: unknown;
+  total_cost_usd_micro?: unknown;
+}
+
 export interface ZgTrace {
   request_id: string;
   provider: string;
-  billing?: { currency?: string; total_cost?: string; total_cost_usd_micro?: string };
+  billing?: ZgBilling;
+}
+
+/**
+ * 0G executed (a request id exists) but its cost could not be established. Carries the ids an
+ * operator needs to reconcile against GET /v1/account/usage/history.
+ */
+export class BillingUnavailableError extends UpstreamError {
+  constructor(
+    readonly requestId: string,
+    readonly provider: string | null,
+    reason: string,
+  ) {
+    super("0g", `request ${requestId}: ${reason}`);
+    this.name = "BillingUnavailableError";
+  }
 }
 
 /** What every skill executor returns (docs/04). */
@@ -29,6 +52,48 @@ export interface ZgBalance {
   currency: string;
   credit_balance: string;
   total_balance: string;
+}
+
+/** Parses a non-negative integer amount; JSON strings are canonical, safe integers tolerated. */
+function microAmount(value: unknown): bigint | null {
+  if (typeof value === "string" && /^(0|[1-9]\d{0,30})$/.test(value)) return BigInt(value);
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+  return null;
+}
+
+/**
+ * Cost of one 0G Router request in micro-USD, per the Router API contract
+ * (https://0gfoundation.github.io/0g-router/, x_0g_trace.billing):
+ *   1. `total_cost_usd_micro` — the request's cost in micro-USD whatever the account settles in.
+ *   2. otherwise, when `currency === "usd"`, `total_cost` is a micro-USD integer string
+ *      (and `input_cost + output_cost == total_cost` when both parts are present).
+ * `currency: "0g"` costs are wei and are never converted. Missing, malformed or negative
+ * values throw BillingUnavailableError; zero is never substituted.
+ */
+export function billedCostUsdMicro(trace: ZgTrace | undefined): bigint {
+  if (!trace?.request_id) throw new UpstreamError("0g", "response missing x_0g_trace.request_id");
+  const unavailable = (reason: string) =>
+    new BillingUnavailableError(trace.request_id, trace.provider ?? null, reason);
+  const billing = trace.billing;
+  if (!billing || typeof billing !== "object") throw unavailable("x_0g_trace.billing is missing");
+  if (billing.total_cost_usd_micro !== undefined) {
+    const micro = microAmount(billing.total_cost_usd_micro);
+    if (micro === null) throw unavailable("billing.total_cost_usd_micro is malformed");
+    return micro;
+  }
+  if (billing.currency !== "usd")
+    throw unavailable(
+      `billing has no total_cost_usd_micro and currency ${JSON.stringify(billing.currency ?? null)} is not usd`,
+    );
+  const total = microAmount(billing.total_cost);
+  if (total === null) throw unavailable("billing.total_cost is missing or malformed");
+  if (billing.input_cost !== undefined || billing.output_cost !== undefined) {
+    const input = microAmount(billing.input_cost);
+    const output = microAmount(billing.output_cost);
+    if (input === null || output === null || input + output !== total)
+      throw unavailable("billing input_cost + output_cost does not equal total_cost");
+  }
+  return total;
 }
 
 async function zg<T>(path: string, key: string, init: RequestInit, ms: number): Promise<T> {
@@ -62,12 +127,11 @@ async function zg<T>(path: string, key: string, init: RequestInit, ms: number): 
 
 function toResult(output: string, trace: ZgTrace | undefined): ZgResult {
   if (!trace?.request_id) throw new UpstreamError("0g", "response missing x_0g_trace.request_id");
-  const micro = trace.billing?.total_cost_usd_micro;
   return {
     output,
     requestId: trace.request_id,
     provider: trace.provider,
-    costUsdMicro: micro && /^\d+$/.test(micro) ? BigInt(micro) : 0n,
+    costUsdMicro: billedCostUsdMicro(trace),
   };
 }
 

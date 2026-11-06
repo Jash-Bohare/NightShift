@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "demo": "tsx demo.ts"
   },
   "dependencies": {
     "@hiero-ledger/sdk": "2.85.0",

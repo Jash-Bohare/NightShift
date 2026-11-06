@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { ENS_PARENT_NAME } from "@nightshift/shared";
 
-/** Statuses the run route accepts (paused_budget is re-checked per request and auto-resumes). */
+/** Statuses the run route accepts (paused_budget is re-checked per request; it returns to active only after a verified paid run). */
 export const AVAILABLE_STATUSES = ["active", "paused_budget"] as const;
 const STATUSES = [
   "active",

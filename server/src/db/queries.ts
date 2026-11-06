@@ -19,6 +19,11 @@ export async function agentByLabel(label: string, fresh = false): Promise<AgentR
   return agent;
 }
 
+/** Test hook: forget cached agent rows (the simulated end-to-end suite reseeds its database). */
+export function clearAgentCache(): void {
+  agentCache.clear();
+}
+
 export async function setAgentStatus(agent: AgentRow, status: AgentStatus): Promise<void> {
   must(
     "set agent status",
@@ -29,6 +34,36 @@ export async function setAgentStatus(agent: AgentRow, status: AgentStatus): Prom
   const dir = await db.from("directory").update({ status }).eq("label", agent.label);
   if (dir.error)
     throw new UpstreamError("db", `directory status ${agent.label}: ${dir.error.message}`);
+}
+
+/**
+ * Compare-and-set lifecycle transition: updates only when the stored status still equals `from`,
+ * so concurrent requests cannot overwrite a newer state (e.g. an owner pause or a revocation).
+ * Returns whether this call performed the transition.
+ */
+export async function transitionAgentStatus(
+  agent: AgentRow,
+  from: AgentStatus,
+  to: AgentStatus,
+): Promise<boolean> {
+  const r = await db
+    .from("agents")
+    .update({ status: to })
+    .eq("id", agent.id)
+    .eq("status", from)
+    .select("id");
+  if (r.error) throw new UpstreamError("db", `agent status ${from}->${to}: ${r.error.message}`);
+  agentCache.delete(agent.label);
+  const changed = ((r.data as unknown[] | null) ?? []).length > 0;
+  if (!changed) return false;
+  const dir = await db
+    .from("directory")
+    .update({ status: to })
+    .eq("label", agent.label)
+    .eq("status", from);
+  if (dir.error)
+    throw new UpstreamError("db", `directory status ${agent.label}: ${dir.error.message}`);
+  return true;
 }
 
 export async function agentZgKey(agentId: string): Promise<string> {

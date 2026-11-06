@@ -32,6 +32,9 @@ function agent(label: string, amount: bigint, success = 1, jobs = 3, p50 = 10_00
   return {
     label,
     ensName: `${label}.nightshift.eth`,
+    owner: "0.0.100",
+    resolver: "0x0000000000000000000000000000000000000001",
+    expiry: "2000000000",
     skill: "transcribe:ta",
     price: price(amount),
     payTo: "0.0.100",

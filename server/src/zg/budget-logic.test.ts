@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { decide, nextUtcMidnight, Reservations, utcDayStart } from "./budget-logic.js";
+import {
+  decide,
+  nextUtcMidnight,
+  Reservations,
+  sumRecordedCosts,
+  utcDayStart,
+} from "./budget-logic.js";
 
 const now = new Date("2030-03-14T10:00:00Z");
 const base = {
@@ -89,5 +95,34 @@ describe("Reservations", () => {
     b();
     expect(r.total("a")).toBe(0n);
     expect(r.total("b")).toBe(100n);
+  });
+});
+
+describe("recorded 0G costs", () => {
+  it("sums exact integer costs and ignores only explicit budget refusals", () => {
+    expect(
+      sumRecordedCosts([
+        { id: "a", status: "done", zg_cost_usd_micro: "1200" },
+        { id: "b", status: "settled", zg_cost_usd_micro: 800 },
+        { id: "c", status: "refused_budget", zg_cost_usd_micro: null },
+      ]),
+    ).toBe(2_000n);
+  });
+
+  it("fails closed when a job that may have executed has no billing record", () => {
+    expect(() =>
+      sumRecordedCosts([{ id: "unknown-job", status: "failed_internal", zg_cost_usd_micro: null }]),
+    ).toThrow("job unknown-job has no recorded 0G cost");
+  });
+
+  it("rejects unsafe numeric or malformed cost records", () => {
+    expect(() =>
+      sumRecordedCosts([
+        { id: "unsafe", status: "done", zg_cost_usd_micro: Number.MAX_SAFE_INTEGER + 1 },
+      ]),
+    ).toThrow("unsafe 0G cost");
+    expect(() =>
+      sumRecordedCosts([{ id: "malformed", status: "done", zg_cost_usd_micro: "12.5" }]),
+    ).toThrow("malformed 0G cost");
   });
 });

@@ -10,7 +10,10 @@ export type JobStatus =
   | "failed_upstream"
   | "failed_internal"
   | "settle_failed"
-  | "refused_budget";
+  | "refused_budget"
+  // 0G billing or payment settlement outcome is unknown; an operator must reconcile it
+  // (migration 0006). Never retried automatically.
+  | "needs_reconciliation";
 
 type Num = number | string;
 
@@ -53,6 +56,7 @@ export interface JobRow {
   hcs_sequence: Num | null;
   latency_ms: number | null;
   error: string | null;
+  output_sha256: string | null;
   created_at: string;
 }
 

@@ -30,3 +30,6 @@ contracts/broadcast/**/run-[0-9]*.json
 docs/
 CLAUDE.md
 HOW_TO_USE.md
+
+# simulated local stack (public key + URLs only)
+server/.simulated-stack.json

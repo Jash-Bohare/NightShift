@@ -1,7 +1,12 @@
 import type { AddressInfo } from "node:net";
 import express, { type ErrorRequestHandler } from "express";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../errors.js";
+
+vi.mock("../buyer-console-auth.js", () => ({
+  authorizeBuyerConsole: vi.fn(async () => "did:privy:testuser"),
+}));
+
 import { buyerConsoleRouter } from "./buyerConsole.js";
 
 // Only free paths are exercised here; a real /buyer-console/run would spend testnet funds.
@@ -36,9 +41,14 @@ describe("buyer console routes", () => {
     expect(body.state.dailySpentAtomic).toMatch(/^\d+$/);
   });
 
-  it("GET /buyer-console/run rejects a malformed skill before starting a run", async () => {
-    const res = await fetch(`${base}/buyer-console/run?skill=evil;drop`);
+  it("POST /buyer-console/run rejects a malformed skill before starting a run", async () => {
+    const res = await fetch(`${base}/buyer-console/run?skill=evil;drop`, { method: "POST" });
     expect(res.status).toBe(422);
     expect(((await res.json()) as { error: string }).error).toBe("invalid_input");
+  });
+
+  it("does not allow state-changing buyer runs through GET", async () => {
+    const res = await fetch(`${base}/buyer-console/run`);
+    expect(res.status).toBe(404);
   });
 });

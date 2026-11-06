@@ -15,6 +15,7 @@ export interface JobMessage {
   asset: string;
   payer: string;
   tx: string;
+  output_sha256: string;
   zg_request_id: string | null;
   zg_provider: string | null;
   ts: string;
