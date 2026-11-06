@@ -1,0 +1,17 @@
+# Vercel CLI uploads (dashboard Git imports ignore this file).
+# Never upload local env files: web/.env.local would bake localhost URLs and the Privy app id
+# into the hosted demo build. Hosted values come from the Vercel project's env settings.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+node_modules
+**/node_modules
+**/.next
+docs
+contracts/lib
+contracts/out
+contracts/cache
+**/.state.json
+**/.buyer-run.lock
