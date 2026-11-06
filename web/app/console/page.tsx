@@ -14,9 +14,9 @@ import { serverGet, type BuyerBudget } from "../../lib/api";
 import {
   reduceConsole,
   initialConsoleState,
+  interpretSseFrame,
   parseBuyerBudget,
   parseBuyerEvent,
-  parseSseFrame,
 } from "../../lib/console";
 import { formatElapsedSince } from "../../lib/time";
 import { publicEnv } from "../../lib/public-env";
@@ -151,7 +151,8 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
     startAt.current = Date.now();
     setBalanceBefore(budget.data?.wallet?.usdcAtomic ?? null);
     const requestController = new AbortController();
-    const timeout = setTimeout(() => requestController.abort(), 120_000);
+    // Longer than the server's 180 s x402 payment window, so a slow but healthy run is never cut.
+    const timeout = setTimeout(() => requestController.abort(), 240_000);
     let knownRejected = false;
     try {
       const accessToken = await auth.getAccessToken();
@@ -203,25 +204,18 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
         const frames = buffer.split("\n\n");
         buffer = frames.pop() ?? "";
         for (const frame of frames) {
-          const parsed = parseSseFrame(frame);
-          if (!parsed) continue;
-          if (parsed.comment && /^run-\d+$/.test(parsed.comment)) {
-            dispatch({ type: "set-run-id", runId: parsed.comment });
-          }
-          if (parsed.event === "complete") {
-            const result: unknown = JSON.parse(parsed.data);
-            if (!isCompleteEvent(result))
-              throw new Error("Malformed complete event from buyer stream.");
+          const outcome = interpretSseFrame(frame);
+          if (!outcome) continue;
+          if (outcome.kind === "run-id") dispatch({ type: "set-run-id", runId: outcome.runId });
+          else if (outcome.kind === "event") dispatch({ type: "event", event: outcome.event });
+          else {
             dispatch({
               type: "complete",
-              success: result.success,
-              message: result.error ?? undefined,
+              success: outcome.result.success,
+              message: outcome.result.error ?? undefined,
             });
             complete = true;
-            continue;
           }
-          const event = parseBuyerEvent(parsed.event, parsed.data);
-          if (event) dispatch({ type: "event", event });
         }
         if (complete) {
           await reader.cancel();
@@ -552,15 +546,6 @@ function isPersistedEvent(
     row.payload !== null &&
     "runId" in row.payload &&
     row.payload.runId === runId
-  );
-}
-
-function isCompleteEvent(value: unknown): value is { success: boolean; error?: string | null } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "success" in value &&
-    typeof value.success === "boolean"
   );
 }
 

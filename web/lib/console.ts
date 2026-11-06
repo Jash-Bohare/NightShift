@@ -211,3 +211,43 @@ export function parseBuyerBudget(value: unknown): BuyerBudget {
   }
   return value as unknown as BuyerBudget;
 }
+
+export interface CompleteEvent {
+  success: boolean;
+  error?: string | null;
+}
+
+export type FrameOutcome =
+  | { kind: "run-id"; runId: string }
+  | { kind: "event"; event: BuyerEvent }
+  | { kind: "complete"; result: CompleteEvent };
+
+/**
+ * One SSE frame from POST /buyer-console/run → what the page should do with it.
+ * The server opens with a `: run-<id>` comment and sends `: ping` heartbeats every 15 s; comment
+ * frames carry no data and must never reach the JSON event parser (doing so aborted the stream on
+ * its first frame, so a live run never rendered). Malformed buyer events still throw.
+ */
+export function interpretSseFrame(frame: string): FrameOutcome | null {
+  const parsed = parseSseFrame(frame);
+  if (!parsed) return null;
+  if (!parsed.data) {
+    return parsed.comment && /^run-\d+$/.test(parsed.comment)
+      ? { kind: "run-id", runId: parsed.comment }
+      : null;
+  }
+  if (parsed.event === "complete") {
+    const result: unknown = JSON.parse(parsed.data);
+    if (!isRecord(result) || typeof result.success !== "boolean")
+      throw new Error("Malformed complete event from buyer stream.");
+    return {
+      kind: "complete",
+      result: {
+        success: result.success,
+        error: typeof result.error === "string" ? result.error : null,
+      },
+    };
+  }
+  const event = parseBuyerEvent(parsed.event, parsed.data);
+  return event ? { kind: "event", event } : null;
+}
