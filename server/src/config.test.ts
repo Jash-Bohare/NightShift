@@ -51,4 +51,24 @@ describe("runtime configuration safety defaults", () => {
       expect(error.message).not.toContain(secret),
     );
   });
+
+  it("normalises WEB_ORIGIN to browser origins (trailing slash, paths, lists)", async () => {
+    const one = await loadConfig({ WEB_ORIGIN: "https://night-shift-roan-two.vercel.app/" });
+    expect(one.env.WEB_ORIGIN).toEqual(["https://night-shift-roan-two.vercel.app"]);
+    vi.resetModules();
+    const many = await loadConfig({
+      WEB_ORIGIN: " https://a.vercel.app/ , https://b.vercel.app/some/path,https://a.vercel.app",
+    });
+    expect(many.env.WEB_ORIGIN).toEqual(["https://a.vercel.app", "https://b.vercel.app"]);
+  });
+
+  it("rejects a WEB_ORIGIN that is not an http(s) URL", async () => {
+    await expect(loadConfig({ WEB_ORIGIN: "night-shift.vercel.app" })).rejects.toThrow(
+      /WEB_ORIGIN/,
+    );
+    vi.resetModules();
+    await expect(loadConfig({ WEB_ORIGIN: "ftp://x.example" })).rejects.toThrow(/WEB_ORIGIN/);
+    vi.resetModules();
+    await expect(loadConfig({ WEB_ORIGIN: " , " })).rejects.toThrow(/WEB_ORIGIN/);
+  });
 });

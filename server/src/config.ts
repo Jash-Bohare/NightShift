@@ -52,7 +52,32 @@ const EnvSchema = z
       .transform((value) => value === "true"),
     PUBLIC_SERVER_URL: z.url(),
     PUBLIC_WEB_URL: z.url(),
-    WEB_ORIGIN: z.url(),
+    // Browser origin(s) allowed by CORS: one URL or a comma-separated list. Each is normalised to
+    // its origin, so "https://x.vercel.app/" (trailing slash) still matches what browsers send.
+    WEB_ORIGIN: z
+      .string()
+      .min(1)
+      .transform((value, ctx) => {
+        const origins: string[] = [];
+        for (const part of value
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean)) {
+          try {
+            const url = new URL(part);
+            if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("protocol");
+            origins.push(url.origin);
+          } catch {
+            ctx.addIssue({ code: "custom", message: `not an http(s) URL: ${part}` });
+            return z.NEVER;
+          }
+        }
+        if (origins.length === 0) {
+          ctx.addIssue({ code: "custom", message: "at least one origin is required" });
+          return z.NEVER;
+        }
+        return [...new Set(origins)];
+      }),
     SECRETS_MASTER_KEY: z.string().regex(/^[0-9a-f]{64}$/, "openssl rand -hex 32"),
     NIGHTSHIFT_QUOTE_SIGNING_PRIVATE_KEY: z.string().min(1),
     NIGHTSHIFT_QUOTE_VERIFY_PUBLIC_KEY: z.string().min(1),

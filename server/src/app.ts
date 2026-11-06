@@ -23,8 +23,8 @@ import { rateLimit } from "./rate-limit.js";
 export function corsOrigins(): string[] {
   // The local web origin is only implicitly trusted outside production.
   return env.NODE_ENV === "production"
-    ? [env.WEB_ORIGIN]
-    : [...new Set([env.WEB_ORIGIN, "http://localhost:3000"])];
+    ? env.WEB_ORIGIN
+    : [...new Set([...env.WEB_ORIGIN, "http://localhost:3000"])];
 }
 
 export function createApp(): express.Express {
