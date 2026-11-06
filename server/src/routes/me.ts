@@ -51,6 +51,7 @@ export interface TodayUsage {
   spentUsdMicro: string;
   earnedAtomic: string;
   jobsSettled: number;
+  jobsRefused: number;
 }
 
 /**
@@ -58,10 +59,14 @@ export interface TodayUsage {
  * job's recorded cost; earnings and the settled count include only settled jobs.
  */
 export function summarizeToday(rows: z.infer<typeof TodayJobRow>[]): Map<string, TodayUsage> {
-  const out = new Map<string, { spent: bigint; earned: bigint; settled: number }>();
+  const out = new Map<
+    string,
+    { spent: bigint; earned: bigint; settled: number; refused: number }
+  >();
   for (const row of rows) {
-    const acc = out.get(row.agent_id) ?? { spent: 0n, earned: 0n, settled: 0 };
+    const acc = out.get(row.agent_id) ?? { spent: 0n, earned: 0n, settled: 0, refused: 0 };
     if (row.zg_cost_usd_micro !== null) acc.spent += BigInt(row.zg_cost_usd_micro);
+    if (row.status === "refused_budget") acc.refused += 1;
     if (row.status === "settled") {
       acc.earned += BigInt(row.price_atomic);
       acc.settled += 1;
@@ -75,6 +80,7 @@ export function summarizeToday(rows: z.infer<typeof TodayJobRow>[]): Map<string,
         spentUsdMicro: a.spent.toString(),
         earnedAtomic: a.earned.toString(),
         jobsSettled: a.settled,
+        jobsRefused: a.refused,
       },
     ]),
   );
@@ -160,7 +166,12 @@ meRouter.get("/me", async (req, res) => {
       hederaAccountId: parsed.data.hedera_account_id ?? null,
       resolverAddress: parsed.data.resolver_address ?? null,
       registerTx: parsed.data.register_tx ?? null,
-      today: today.get(parsed.data.id) ?? { spentUsdMicro: "0", earnedAtomic: "0", jobsSettled: 0 },
+      today: today.get(parsed.data.id) ?? {
+        spentUsdMicro: "0",
+        earnedAtomic: "0",
+        jobsSettled: 0,
+        jobsRefused: 0,
+      },
     };
   });
 

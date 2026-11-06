@@ -65,3 +65,52 @@ export function buildInitialRecords(a: RecordInput): { key: OwnerKey; value: str
     { key: "nightshift.model", value: a.model },
   ];
 }
+
+/**
+ * Records for an owner edit (dashboard drawer, docs/06): only the keys the edit touches. A price
+ * change rewrites `nightshift.price` and `agent-context` (whose text states the price) from the same
+ * template as launch, so the two can never disagree.
+ */
+export function draftRecordEdits(
+  current: RecordInput,
+  edit: { priceAtomic?: bigint; description?: string },
+): { key: OwnerKey; value: string }[] {
+  const next = buildInitialRecords({
+    ...current,
+    ...(edit.priceAtomic !== undefined ? { priceAtomic: edit.priceAtomic } : {}),
+    ...(edit.description !== undefined ? { description: edit.description } : {}),
+  });
+  const keys = new Set<OwnerKey>();
+  if (edit.priceAtomic !== undefined) {
+    keys.add("nightshift.price");
+    keys.add("agent-context");
+  }
+  if (edit.description !== undefined) keys.add("description");
+  return next.filter((r) => keys.has(r.key));
+}
+
+/**
+ * Strictly parse a `nightshift.price` record. Returns the atomic amount only when asset, network
+ * and unit match what this worker is paid in; otherwise a reason string.
+ */
+export function parsePriceRecord(
+  text: string | undefined,
+  expected: { asset: string; unit: string },
+): { ok: true; amount: bigint } | { ok: false; reason: string } {
+  let j: unknown;
+  try {
+    j = JSON.parse(text ?? "");
+  } catch {
+    return { ok: false, reason: "nightshift.price is not JSON" };
+  }
+  if (typeof j !== "object" || j === null)
+    return { ok: false, reason: "nightshift.price is not an object" };
+  const p = j as Record<string, unknown>;
+  if (typeof p.amount !== "string" || !/^[1-9]\d{0,15}$/.test(p.amount))
+    return { ok: false, reason: "nightshift.price amount is not a positive integer string" };
+  if (p.asset !== expected.asset) return { ok: false, reason: `asset must be ${expected.asset}` };
+  if (p.network !== HEDERA_NETWORK)
+    return { ok: false, reason: `network must be ${HEDERA_NETWORK}` };
+  if (p.unit !== expected.unit) return { ok: false, reason: `unit must be ${expected.unit}` };
+  return { ok: true, amount: BigInt(p.amount) };
+}

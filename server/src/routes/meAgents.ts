@@ -10,13 +10,20 @@ import type { AgentStatus } from "../db/types.js";
 import { authenticatePrivyUser } from "../buyer-console-auth.js";
 import { ApiError, UpstreamError } from "../errors.js";
 import { checkPayoutAccount } from "../hedera/mirror.js";
-import { log } from "../log.js";
+import { log, logError } from "../log.js";
+import { env } from "../config.js";
+import { draftRecordEdits, parsePriceRecord } from "../ens/records.js";
+import { readAgentRecords } from "../ens/read.js";
+import { syncAgentToDirectory } from "../ens/indexer.js";
+import { MAX_DAILY_CAP_USD_MICRO, MAX_PRICE_ATOMIC } from "../limits.js";
+import type { AgentRow } from "../db/types.js";
+import { packetToBytes, normalize } from "viem/ens";
+import { toHex } from "viem";
 
 export const meAgentsRouter = Router();
 const json = express.json({ limit: "16kb" });
 
-/** $1,000 per UTC day: far above any credit allowance, low enough to catch a typo. */
-export const MAX_DAILY_CAP_USD_MICRO = 1_000_000_000n;
+export { MAX_DAILY_CAP_USD_MICRO } from "../limits.js";
 
 export type OwnerStatusTarget = "active" | "paused_owner";
 
@@ -229,5 +236,117 @@ meAgentsRouter.get("/me/payouts", async (req, res) => {
     page,
     limit,
     ...(items.length > limit ? { nextPage: page + 1 } : {}),
+  });
+});
+
+// ---- Owner record edits (docs/06 "Edit records" drawer) -----------------------------------
+// The server never writes these records: it returns the exact values to write, the owner signs
+// one resolver multicall with their own wallet, then /sync re-reads ENS and follows it.
+
+const DraftBody = z
+  .object({
+    priceAtomic: z
+      .string()
+      .regex(/^[1-9]\d{0,15}$/)
+      .optional(),
+    description: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict()
+  .refine((b) => b.priceAtomic !== undefined || b.description !== undefined, {
+    message: "nothing to change",
+  });
+
+function recordInput(agent: AgentRow) {
+  if (!agent.hedera_account_id)
+    throw new ApiError(409, "invalid_state", "agent has no payout account yet");
+  return {
+    label: agent.label,
+    ensName: agent.ens_name,
+    skill: agent.skill,
+    model: agent.model,
+    priceAtomic: BigInt(agent.price_atomic),
+    priceUnit: agent.price_unit,
+    payTo: agent.hedera_account_id,
+    usdcTokenId: env.HEDERA_USDC_TOKEN_ID,
+    serverUrl: env.PUBLIC_SERVER_URL,
+    webUrl: env.PUBLIC_WEB_URL,
+  };
+}
+
+async function editableAgent(authorization: string | undefined, rawId: unknown) {
+  const { owner } = await requireOwner(authorization);
+  const id = AgentId.safeParse(rawId);
+  if (!id.success || !owner) throw new ApiError(404, "not_found", "no such agent");
+  const agent = await ownedAgent(owner.id, id.data);
+  if (!agent) throw new ApiError(404, "not_found", "no such agent");
+  if (!agent.resolver_address)
+    throw new ApiError(409, "invalid_state", "agent is not registered on ENS yet");
+  return { owner, agent };
+}
+
+meAgentsRouter.post("/me/agents/:id/records/draft", json, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const { owner, agent } = await editableAgent(req.header("authorization"), req.params.id);
+  const body = DraftBody.safeParse(req.body);
+  if (!body.success)
+    throw new ApiError(422, "invalid_input", "invalid record edit", body.error.issues);
+  const priceAtomic =
+    body.data.priceAtomic === undefined ? undefined : BigInt(body.data.priceAtomic);
+  if (priceAtomic !== undefined && priceAtomic > MAX_PRICE_ATOMIC)
+    throw new ApiError(422, "invalid_input", "price is above 10 USDC per unit");
+  const records = draftRecordEdits(recordInput(agent), {
+    ...(priceAtomic !== undefined ? { priceAtomic } : {}),
+    ...(body.data.description !== undefined ? { description: body.data.description } : {}),
+  });
+  res.json({
+    ensName: agent.ens_name,
+    dnsName: toHex(packetToBytes(normalize(agent.ens_name))),
+    resolver: agent.resolver_address,
+    // The registrar granted record roles to the ENS owner chosen at launch.
+    signer: owner.evm_address,
+    records,
+  });
+});
+
+meAgentsRouter.post("/me/agents/:id/records/sync", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const { agent } = await editableAgent(req.header("authorization"), req.params.id);
+  const recs = await readAgentRecords(agent.ens_name, true);
+  if (!recs.resolver || recs.resolver.toLowerCase() !== agent.resolver_address!.toLowerCase())
+    throw new UpstreamError(
+      "ens",
+      `${agent.ens_name} no longer resolves through its registered resolver`,
+    );
+  const price = parsePriceRecord(recs.texts["nightshift.price"], {
+    asset: env.HEDERA_USDC_TOKEN_ID,
+    unit: agent.price_unit,
+  });
+  if (!price.ok)
+    throw new ApiError(409, "invalid_state", `ENS price record rejected: ${price.reason}`);
+  if (price.amount > MAX_PRICE_ATOMIC)
+    throw new ApiError(409, "invalid_state", "ENS price is above 10 USDC per unit");
+  if (price.amount.toString() !== String(agent.price_atomic)) {
+    const r = await db
+      .from("agents")
+      .update({ price_atomic: price.amount.toString() })
+      .eq("id", agent.id)
+      .eq("owner_id", agent.owner_id)
+      .select("id")
+      .maybeSingle();
+    if (r.error) throw new UpstreamError("db", `sync price ${agent.id}: ${r.error.message}`);
+    forgetAgent(agent.label);
+    log("db", "price synced from ENS", { agent: agent.label, price: price.amount.toString() });
+  }
+  let directorySynced = true;
+  try {
+    await syncAgentToDirectory(agent.label);
+  } catch (error) {
+    directorySynced = false;
+    logError("ens", `directory sync for ${agent.label} failed`, error);
+  }
+  res.json({
+    priceAtomic: price.amount.toString(),
+    description: recs.texts["description"] ?? null,
+    directorySynced,
   });
 });

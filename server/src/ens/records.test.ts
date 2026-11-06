@@ -63,3 +63,52 @@ describe("buildInitialRecords", () => {
     expect(blank.find((r) => r.key === "description")?.value).toMatch(/^Transcribes Tamil/);
   });
 });
+
+describe("owner record edits", () => {
+  const current = {
+    label: "tamil-scribe",
+    ensName: "tamil-scribe.nightshift.eth",
+    skill: "transcribe:ta",
+    model: "whisper-large-v3",
+    priceAtomic: 30_000n,
+    priceUnit: "minute",
+    payTo: "0.0.123",
+    usdcTokenId: "0.0.429274",
+    serverUrl: "http://localhost:8787",
+    webUrl: "http://localhost:3000",
+  };
+  it("a price edit rewrites price and context together", async () => {
+    const { draftRecordEdits } = await import("./records.js");
+    const recs = draftRecordEdits(current, { priceAtomic: 25_000n });
+    expect(recs.map((r) => r.key).sort()).toEqual(["agent-context", "nightshift.price"]);
+    expect(JSON.parse(recs.find((r) => r.key === "nightshift.price")!.value).amount).toBe("25000");
+    expect(recs.find((r) => r.key === "agent-context")!.value).toContain("0.025 USDC per minute");
+  });
+  it("a description edit writes only the description", async () => {
+    const { draftRecordEdits } = await import("./records.js");
+    expect(draftRecordEdits(current, { description: "New text" })).toEqual([
+      { key: "description", value: "New text" },
+    ]);
+  });
+  it("parses a price record strictly", async () => {
+    const { parsePriceRecord } = await import("./records.js");
+    const exp = { asset: "0.0.429274", unit: "minute" };
+    const good = JSON.stringify({
+      amount: "25000",
+      asset: "0.0.429274",
+      network: "hedera:testnet",
+      unit: "minute",
+    });
+    expect(parsePriceRecord(good, exp)).toEqual({ ok: true, amount: 25_000n });
+    for (const bad of [
+      undefined,
+      "nope",
+      good.replace('"25000"', '"0"'),
+      good.replace('"25000"', "25000"),
+      good.replace("0.0.429274", "0.0.1"),
+      good.replace("hedera:testnet", "hedera:mainnet"),
+      good.replace('"minute"', '"page"'),
+    ])
+      expect(parsePriceRecord(bad, exp).ok).toBe(false);
+  });
+});

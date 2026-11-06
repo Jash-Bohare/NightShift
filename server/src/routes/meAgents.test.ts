@@ -6,6 +6,22 @@ import { FakeSupabase } from "../testing/fake-supabase.js";
 const state = vi.hoisted(() => ({
   db: undefined as unknown as FakeSupabase,
   payoutCheck: { ok: true } as { ok: boolean; reason?: string },
+  ens: { resolver: null as string | null, texts: {} as Record<string, string> },
+  synced: [] as string[],
+}));
+
+vi.mock("../ens/read.js", () => ({
+  readAgentRecords: vi.fn(async (name: string) => ({
+    name,
+    resolver: state.ens.resolver,
+    texts: state.ens.texts,
+  })),
+}));
+vi.mock("../ens/indexer.js", () => ({
+  syncAgentToDirectory: vi.fn(async (label: string) => {
+    state.synced.push(label);
+    return "indexed";
+  }),
 }));
 
 vi.mock("../db/client.js", () => ({
@@ -30,7 +46,7 @@ vi.mock("../buyer-console-auth.js", async () => {
   };
 });
 
-import { ApiError } from "../errors.js";
+import { ApiError, UpstreamError } from "../errors.js";
 import { meAgentsRouter, ownerTransition } from "./meAgents.js";
 
 const OWNER_A = "11111111-1111-4111-8111-111111111111";
@@ -43,6 +59,10 @@ app.use(meAgentsRouter);
 const onError: ErrorRequestHandler = (error, _req, res, next) => {
   if (error instanceof ApiError) {
     res.status(error.status).json(error.toJSON());
+    return;
+  }
+  if (error instanceof UpstreamError) {
+    res.status(502).json({ error: "upstream" });
     return;
   }
   next(error);
@@ -81,6 +101,7 @@ function agent(id: string, ownerId: string, label: string, status: string) {
     daily_cap_usd_micro: "500000",
     status,
     hedera_account_id: "0.0.700",
+    resolver_address: "0x" + "c".repeat(40),
     expiry: "2027-01-01T00:00:00.000Z",
   };
 }
@@ -88,6 +109,8 @@ function agent(id: string, ownerId: string, label: string, status: string) {
 beforeEach(() => {
   state.db = new FakeSupabase();
   state.payoutCheck = { ok: true };
+  state.ens = { resolver: "0x" + "C".repeat(40), texts: {} };
+  state.synced = [];
   state.db.seed("owners", [
     { id: OWNER_A, privy_user_id: "did:privy:ownerA", evm_address: "0x" + "a".repeat(40) },
     { id: OWNER_B, privy_user_id: "did:privy:ownerB", evm_address: "0x" + "b".repeat(40) },
@@ -265,5 +288,60 @@ describe("GET /me/payouts", () => {
   it("returns an empty list for a user without an owner record", async () => {
     const res = await call("GET", "/me/payouts", "stranger");
     expect(await res.json()).toEqual({ items: [], page: 1, limit: 20 });
+  });
+});
+
+describe("owner record edits", () => {
+  const price = (amount: string, asset = "0.0.429274") =>
+    JSON.stringify({ amount, asset, network: "hedera:testnet", unit: "minute" });
+
+  it("drafts only the touched records for the owner to sign", async () => {
+    const res = await call("POST", `/me/agents/${AGENT_A}/records/draft`, "owner-a", {
+      priceAtomic: "25000",
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      dnsName: string;
+      resolver: string;
+      signer: string;
+      records: { key: string; value: string }[];
+    };
+    expect(body.resolver).toBe("0x" + "c".repeat(40));
+    expect(body.signer).toBe("0x" + "a".repeat(40));
+    expect(body.dnsName).toMatch(/^0x08776f726b65722d61/); // length 8, "worker-a"
+    expect(body.records.map((r) => r.key).sort()).toEqual(["agent-context", "nightshift.price"]);
+  });
+
+  it("refuses drafts for another owner's agent or with bad input", async () => {
+    expect(
+      (await call("POST", `/me/agents/${AGENT_B}/records/draft`, "owner-a", { description: "x" }))
+        .status,
+    ).toBe(404);
+    for (const body of [{}, { priceAtomic: "0" }, { priceAtomic: "10000001" }, { foo: 1 }])
+      expect(
+        (await call("POST", `/me/agents/${AGENT_A}/records/draft`, "owner-a", body)).status,
+        JSON.stringify(body),
+      ).toBe(422);
+  });
+
+  it("syncs the database price from ENS and refreshes the directory", async () => {
+    state.ens.texts = { "nightshift.price": price("25000"), description: "New" };
+    const res = await call("POST", `/me/agents/${AGENT_A}/records/sync`, "owner-a");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      priceAtomic: "25000",
+      description: "New",
+      directorySynced: true,
+    });
+    expect(state.db.table("agents").find((r) => r.id === AGENT_A)!.price_atomic).toBe("25000");
+    expect(state.synced).toEqual(["worker-a"]);
+  });
+
+  it("never imports a price in the wrong asset or through a foreign resolver", async () => {
+    state.ens.texts = { "nightshift.price": price("25000", "0.0.1") };
+    expect((await call("POST", `/me/agents/${AGENT_A}/records/sync`, "owner-a")).status).toBe(409);
+    state.ens = { resolver: "0x" + "d".repeat(40), texts: { "nightshift.price": price("25000") } };
+    expect((await call("POST", `/me/agents/${AGENT_A}/records/sync`, "owner-a")).status).toBe(502);
+    expect(state.db.table("agents").find((r) => r.id === AGENT_A)!.price_atomic).toBe("30000");
   });
 });

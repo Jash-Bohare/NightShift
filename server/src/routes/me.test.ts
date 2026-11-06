@@ -158,6 +158,7 @@ describe("owner dashboard API", () => {
       spentUsdMicro: "12580",
       earnedAtomic: "60000",
       jobsSettled: 1,
+      jobsRefused: 1,
     });
     expect(state.jobsAgentFilter).toEqual(["8962ca34-6b72-4741-91aa-4ba98480a99e"]);
     expect(body.agents[0]).not.toHaveProperty("zg_api_key_enc");

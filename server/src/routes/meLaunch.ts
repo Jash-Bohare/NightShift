@@ -17,12 +17,9 @@ import { ApiError, UpstreamError } from "../errors.js";
 import { checkPayoutAccount } from "../hedera/mirror.js";
 import { logError } from "../log.js";
 import { balance as zgBalance } from "../zg/router.js";
-import { MAX_DAILY_CAP_USD_MICRO } from "./meAgents.js";
+import { MAX_DAILY_CAP_USD_MICRO, MAX_PRICE_ATOMIC } from "../limits.js";
 
 export const meLaunchRouter = Router();
-
-/** 10 USDC per unit: well above any sensible per-minute price, low enough to catch a typo. */
-export const MAX_PRICE_ATOMIC = 10_000_000n;
 
 export const LaunchBody = z
   .object({
