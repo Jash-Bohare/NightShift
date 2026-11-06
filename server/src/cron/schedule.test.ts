@@ -7,6 +7,7 @@ const jobs = () => {
     reputation: vi.fn(async (): Promise<unknown> => undefined),
     settlementRecovery: vi.fn(async (): Promise<unknown> => undefined),
     payouts: vi.fn(async (): Promise<unknown> => undefined),
+    renewals: vi.fn(async (): Promise<unknown> => undefined),
   };
   return j satisfies CronJobs;
 };
@@ -25,7 +26,7 @@ describe("scheduled jobs", () => {
     const schedule = vi.fn();
     expect(
       scheduleCrons({ cronsEnabled: true, payoutsEnabled: false }, jobs(), schedule).scheduled,
-    ).toEqual(["indexer", "reputation", "settlement-recovery"]);
+    ).toEqual(["indexer", "reputation", "settlement-recovery", "renewals"]);
     const withPayouts = scheduleCrons(
       { cronsEnabled: true, payoutsEnabled: true },
       jobs(),

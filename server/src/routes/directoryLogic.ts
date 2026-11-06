@@ -83,7 +83,17 @@ export interface DirectoryAgent {
 const toBig = (v: number | string | null): bigint | null =>
   v === null ? null : typeof v === "number" ? BigInt(Math.trunc(v)) : BigInt(v);
 
-export function toDirectoryAgent(r: DirectoryRow, asset: string): DirectoryAgent {
+/**
+ * A name past its expiry is reported as `expired` even if the cached status has not caught up
+ * (crons are opt-in), so it is never listed as available. Revoked stays revoked.
+ */
+export function effectiveStatus(status: string, expiry: string | null, now = Date.now()): string {
+  if (status === "revoked" || expiry === null) return status;
+  const at = Date.parse(expiry);
+  return Number.isFinite(at) && at <= now ? "expired" : status;
+}
+
+export function toDirectoryAgent(r: DirectoryRow, asset: string, now = Date.now()): DirectoryAgent {
   const amount = toBig(r.price_atomic);
   return {
     label: r.label,
@@ -97,7 +107,7 @@ export function toDirectoryAgent(r: DirectoryRow, asset: string): DirectoryAgent
     model: r.model,
     description: r.description,
     reputation: r.reputation,
-    status: r.status,
+    status: effectiveStatus(r.status, r.expiry, now),
     expiry: r.expiry,
     updatedAt: r.updated_at,
   };

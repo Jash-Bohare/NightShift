@@ -104,3 +104,32 @@ describe("toDirectoryAgent", () => {
     expect(agents[0]!.price).toEqual({ amount: "30000", asset: "0.0.429274", unit: "minute" });
   });
 });
+
+describe("effectiveStatus", () => {
+  it("reports a lapsed name as expired so it is never listed as available", async () => {
+    const { effectiveStatus, queryDirectory, DirectoryQuery } = await import("./directoryLogic.js");
+    const now = Date.parse("2026-12-06T00:00:00Z");
+    expect(effectiveStatus("active", "2026-12-05T00:00:00Z", now)).toBe("expired");
+    expect(effectiveStatus("active", "2026-12-07T00:00:00Z", now)).toBe("active");
+    expect(effectiveStatus("revoked", "2026-12-05T00:00:00Z", now)).toBe("revoked");
+    expect(effectiveStatus("active", null, now)).toBe("active");
+    const agent = {
+      label: "old",
+      ensName: "old.nightshift.eth",
+      owner: "0x",
+      resolver: "0x",
+      skill: "transcribe:ta",
+      price: { amount: "1", asset: "0.0.429274", unit: "minute" },
+      payTo: null,
+      endpoint: null,
+      model: null,
+      description: null,
+      reputation: null,
+      status: effectiveStatus("active", "2026-12-05T00:00:00Z", now),
+      expiry: "2026-12-05T00:00:00Z",
+      updatedAt: "x",
+    };
+    expect(queryDirectory([agent], DirectoryQuery.parse({})).total).toBe(0);
+    expect(queryDirectory([agent], DirectoryQuery.parse({ status: "expired" })).total).toBe(1);
+  });
+});

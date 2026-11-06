@@ -7,6 +7,7 @@ export interface CronJobs {
   reputation: () => Promise<unknown>;
   settlementRecovery: () => Promise<unknown>;
   payouts: () => Promise<unknown>;
+  renewals: () => Promise<unknown>;
 }
 
 export type Scheduler = (
@@ -43,6 +44,7 @@ export function scheduleCrons(
   register("indexer", "*/30 * * * * *", jobs.indexer);
   register("reputation", "*/10 * * * *", jobs.reputation);
   register("settlement-recovery", "* * * * *", jobs.settlementRecovery);
+  register("renewals", "0 1 * * *", jobs.renewals);
   if (flags.payoutsEnabled) register("payouts", "15 0 * * *", jobs.payouts);
   log("cron", "scheduled jobs enabled", {
     jobs: scheduled.join(","),

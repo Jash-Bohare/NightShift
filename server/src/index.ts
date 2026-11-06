@@ -5,6 +5,7 @@ import { env } from "./config.js";
 import { runIndexerCron } from "./cron/indexer.js";
 import { runDailyPayouts } from "./cron/payouts.js";
 import { runReputationBatch } from "./cron/reputation.js";
+import { runRenewals } from "./cron/renew.js";
 import { scheduleCrons } from "./cron/schedule.js";
 import { runSettlementRecoveries } from "./cron/settlements.js";
 import { log, logError } from "./log.js";
@@ -29,6 +30,7 @@ app.listen(env.PORT, (err?: Error) => {
       reputation: runReputationBatch,
       settlementRecovery: runSettlementRecoveries,
       payouts: runDailyPayouts,
+      renewals: runRenewals,
     },
     (expression, task, options) => void cron.schedule(expression, task, options),
   );

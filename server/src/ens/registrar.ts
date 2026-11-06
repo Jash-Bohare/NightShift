@@ -151,3 +151,38 @@ export async function dripIfLow(
   log("ens", "owner ETH drip", { to, wei: amountWei.toString(), tx: etherscanTx(txHash) });
   return { kind: "sent", txHash, amountWei };
 }
+
+/** NightshiftRegistrar.DEFAULT_TERM: each renewal extends a name by 30 days. */
+export const RENEW_TERM_SECONDS = 30n * 24n * 60n * 60n;
+
+/** Operator renewal; returns the new expiry from the AgentRenewed event. */
+export async function renewAgent(
+  label: string,
+  durationSeconds = RENEW_TERM_SECONDS,
+): Promise<{ txHash: Hash; expiry: Date }> {
+  const { request } = await wrap(
+    "renew simulate",
+    sepoliaClient.simulateContract({
+      ...registrar,
+      account: operator,
+      functionName: "renew",
+      args: [label, durationSeconds],
+    }),
+  );
+  const txHash = await wrap("renew send", wallet.writeContract(request));
+  const receipt = await wrap(
+    "renew receipt",
+    sepoliaClient.waitForTransactionReceipt({ hash: txHash, timeout: 180_000 }),
+  );
+  if (receipt.status !== "success")
+    throw new UpstreamError("ens", `renew reverted: ${etherscanTx(txHash)}`);
+  const [ev] = parseEventLogs({
+    abi: nightshiftRegistrarAbi,
+    eventName: "AgentRenewed",
+    logs: receipt.logs,
+  });
+  if (!ev) throw new UpstreamError("ens", `no AgentRenewed event in ${txHash}`);
+  const expiry = new Date(Number(ev.args.newExpiry) * 1000);
+  log("ens", "agent renewed", { label, expiry: expiry.toISOString(), tx: etherscanTx(txHash) });
+  return { txHash, expiry };
+}
