@@ -1620,12 +1620,22 @@ textarea:focus-visible {
   background: var(--orange);
 }
 
+/* A dotted wire that spans its whole column and points at the workers (was a fixed run of dots
+   that covered a third of the column at desktop width, leaving a blank gap). */
 .wire-connector {
-  overflow: hidden;
-  color: var(--blue);
-  font-family: var(--font-mono);
-  font-size: 22px;
-  letter-spacing: 0.12em;
+  position: relative;
+  height: 0;
+  margin-right: 10px;
+  border-top: 3px dotted var(--blue);
+}
+.wire-connector::after {
+  position: absolute;
+  top: -8px;
+  right: -12px;
+  border-top: 6.5px solid transparent;
+  border-bottom: 6.5px solid transparent;
+  border-left: 11px solid var(--blue);
+  content: "";
 }
 
 .wire-worker__name {

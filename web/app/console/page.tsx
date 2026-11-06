@@ -405,9 +405,7 @@ function ConsolePageContent({ auth }: { auth: ConsoleAuth | null }) {
                 <span style={{ width: `${budgetPercent(budget.data)}%` }} />
               </div>
             </div>
-            <div className="wire-connector" aria-hidden="true">
-              ·························
-            </div>
+            <div className="wire-connector" aria-hidden="true" />
             <div className="wire-list">
               {workers.length === 0 ? (
                 <EmptyPanel
