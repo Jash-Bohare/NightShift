@@ -97,7 +97,7 @@ describe("independent job and HCS settlement verification", () => {
       payer: "0.0.100",
       tx: transactionId,
       output_sha256: "a".repeat(64),
-      ts: "2025-01-01T00:00:00.000Z",
+      ts: "2029-01-01T00:00:00.000Z",
     };
     const fetcher = vi
       .fn<typeof fetch>()

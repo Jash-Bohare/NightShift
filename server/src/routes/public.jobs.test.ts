@@ -62,7 +62,7 @@ describe("allow-listed public job data", () => {
       zg_request_id: "request-1",
       hcs_sequence: "19",
       latency_ms: 100,
-      created_at: "2026-03-02T00:00:00.000Z",
+      created_at: "2030-03-02T00:00:00.000Z",
       agents: { label: "worker", ens_name: "worker.nightshift.eth" },
       buyer_account: "private-payer",
       error: "private internal failure",

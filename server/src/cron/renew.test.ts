@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { selectLapsed, selectRenewals } from "./renew.js";
 
-const NOW = Date.parse("2026-11-30T01:00:00Z");
+const NOW = Date.parse("2030-11-30T01:00:00Z");
 const at = (days: number) => new Date(NOW + days * 24 * 60 * 60 * 1000).toISOString();
 
 const agents = [

@@ -21,7 +21,7 @@ const job = {
   hcsSequence: "3",
   outputSha256: "a".repeat(64),
   latencyMs: 11056,
-  createdAt: "2026-11-05T14:40:02.650Z",
+  createdAt: "2030-11-05T14:40:02.650Z",
 };
 
 describe("owner job history contract", () => {
@@ -68,7 +68,7 @@ const agent = {
   dailyCapUsdMicro: "800000",
   status: "active",
   expiry: null,
-  createdAt: "2026-11-05T00:00:00.000Z",
+  createdAt: "2030-11-05T00:00:00.000Z",
   hederaAccountId: "0.0.9",
   resolverAddress: "0x" + "1".repeat(40),
   registerTx: "0x" + "2".repeat(64),
@@ -114,7 +114,7 @@ describe("owner payouts contract", () => {
   const payout = {
     id: "p1",
     label: "scribe",
-    payoutDate: "2026-11-06",
+    payoutDate: "2030-11-06",
     grossAtomic: "100000",
     ownerAtomic: "90000",
     feeAtomic: "10000",

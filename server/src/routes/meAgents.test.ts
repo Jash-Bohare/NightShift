@@ -102,7 +102,7 @@ function agent(id: string, ownerId: string, label: string, status: string) {
     status,
     hedera_account_id: "0.0.700",
     resolver_address: "0x" + "c".repeat(40),
-    expiry: "2027-01-01T00:00:00.000Z",
+    expiry: "2031-01-01T00:00:00.000Z",
   };
 }
 
@@ -253,7 +253,7 @@ describe("GET /me/payouts", () => {
     state.db.seed("payouts", [
       {
         agent_id: AGENT_A,
-        payout_date: "2026-11-05",
+        payout_date: "2030-11-05",
         gross_atomic: "100000",
         owner_atomic: "90000",
         fee_atomic: "10000",
@@ -263,7 +263,7 @@ describe("GET /me/payouts", () => {
       },
       {
         agent_id: AGENT_B,
-        payout_date: "2026-11-05",
+        payout_date: "2030-11-05",
         gross_atomic: "50000",
         owner_atomic: "45000",
         fee_atomic: "5000",

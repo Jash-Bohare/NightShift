@@ -263,10 +263,10 @@ describe("daily payout claiming on Postgres", () => {
     await seed(db);
     await db.exec(`
       insert into jobs (agent_id, status, units, price_atomic, created_at) values
-        ('${AGENT}', 'settled', 2, 60000, '2026-11-01T10:00:00Z'),
-        ('${AGENT}', 'settled', 1, 30000, '2026-11-01T11:00:00Z'),
-        ('${AGENT}', 'failed_upstream', 1, 30000, '2026-11-01T12:00:00Z'),
-        ('${AGENT}', 'settled', 1, 30000, '2026-11-02T01:00:00Z');
+        ('${AGENT}', 'settled', 2, 60000, '2030-11-01T10:00:00Z'),
+        ('${AGENT}', 'settled', 1, 30000, '2030-11-01T11:00:00Z'),
+        ('${AGENT}', 'failed_upstream', 1, 30000, '2030-11-01T12:00:00Z'),
+        ('${AGENT}', 'settled', 1, 30000, '2030-11-02T01:00:00Z');
     `);
   });
   afterAll(() => db.close());
@@ -286,7 +286,7 @@ describe("daily payout claiming on Postgres", () => {
     );
 
   it("claims settled, unassigned jobs before the payout date exactly once", async () => {
-    expect(await claim("2026-11-02")).toEqual([
+    expect(await claim("2030-11-02")).toEqual([
       {
         gross_atomic: "90000",
         owner_atomic: "90000",
@@ -295,7 +295,7 @@ describe("daily payout claiming on Postgres", () => {
         destination_account: "0.0.9001",
       },
     ]);
-    expect(await claim("2026-11-02")).toEqual([]); // idempotent: same day, nothing new
+    expect(await claim("2030-11-02")).toEqual([]); // idempotent: same day, nothing new
     const assigned = await db.query<{ n: number }>(
       `select count(*)::int as n from jobs where payout_id is not null`,
     );
@@ -305,7 +305,7 @@ describe("daily payout claiming on Postgres", () => {
   it("does not let anon or authenticated claim payouts", async () => {
     for (const role of ["anon", "authenticated"])
       await expect(
-        as(db, role, `select * from claim_daily_payouts('2026-11-03', 10000, 0, '0.0.429274')`),
+        as(db, role, `select * from claim_daily_payouts('2030-11-03', 10000, 0, '0.0.429274')`),
       ).rejects.toThrow(/permission denied/);
   });
 });

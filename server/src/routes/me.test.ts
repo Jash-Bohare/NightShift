@@ -6,7 +6,7 @@ const state = vi.hoisted(() => ({
   owner: {
     id: "50baf702-1284-4d60-8ce6-39b905598d98",
     evm_address: "0x2222222222222222222222222222222222222222",
-    created_at: "2026-03-02T00:00:00.000Z",
+    created_at: "2030-03-02T00:00:00.000Z",
   } as Record<string, unknown> | null,
   agents: [] as Record<string, unknown>[],
   todayJobs: [] as Record<string, unknown>[],
@@ -65,7 +65,7 @@ describe("owner dashboard API", () => {
     state.owner = {
       id: "50baf702-1284-4d60-8ce6-39b905598d98",
       evm_address: "0x2222222222222222222222222222222222222222",
-      created_at: "2026-03-02T00:00:00.000Z",
+      created_at: "2030-03-02T00:00:00.000Z",
     };
     state.agents = [
       {
@@ -78,8 +78,8 @@ describe("owner dashboard API", () => {
         price_unit: "minute",
         daily_cap_usd_micro: "500000",
         status: "active",
-        expiry: "2027-03-02T00:00:00.000Z",
-        created_at: "2026-03-02T00:00:00.000Z",
+        expiry: "2031-03-02T00:00:00.000Z",
+        created_at: "2030-03-02T00:00:00.000Z",
         zg_api_key_enc: "must-not-appear",
         hedera_private_key_enc: "must-not-appear",
       },

@@ -42,7 +42,7 @@ describe("settlement recovery", () => {
     const store = createStore();
     const result = await runSettlementRecoveries({
       store,
-      now: new Date("2026-03-02T00:00:00Z"),
+      now: new Date("2030-03-02T00:00:00Z"),
     });
     expect(result).toEqual({ resolved: 1, retried: 0 });
     expect(store.apply).toHaveBeenCalledWith(recovery);
@@ -57,10 +57,10 @@ describe("settlement recovery", () => {
 
     const result = await runSettlementRecoveries({
       store,
-      now: new Date("2026-03-02T00:00:00Z"),
+      now: new Date("2030-03-02T00:00:00Z"),
     });
     expect(result).toEqual({ resolved: 0, retried: 1 });
-    expect(store.retry).toHaveBeenCalledWith(recovery, "2026-03-02T00:04:00.000Z");
+    expect(store.retry).toHaveBeenCalledWith(recovery, "2030-03-02T00:04:00.000Z");
     expect(store.resolved).not.toHaveBeenCalled();
   });
 });

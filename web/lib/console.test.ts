@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { initialConsoleState, parseBuyerEvent, parseSseFrame, reduceConsole } from "./console";
 
-const timestamp = "2026-11-06T00:00:00.000Z";
+const timestamp = "2030-11-06T00:00:00.000Z";
 
 describe("buyer console SSE handling", () => {
   it("parses named events, multi-line data and the server run id comment", () => {

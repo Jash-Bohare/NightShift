@@ -11,7 +11,7 @@ import {
 const row: PayoutRecord = {
   id: "payout-1",
   agent_id: "agent-1",
-  payout_date: "2026-03-01",
+  payout_date: "2030-03-01",
   gross_atomic: "100000",
   owner_atomic: "90000",
   fee_atomic: "10000",
@@ -85,8 +85,8 @@ describe("daily payout processing", () => {
   it("records a successful mocked payout and never sends it twice", async () => {
     const { store, rows } = createStore();
     const sender = vi.fn(async () => ({ transactionId: "0.0.100@1770000000.000000001" }));
-    const first = await runDailyPayouts({ store, sender, now: new Date("2026-03-02T00:15:00Z") });
-    const second = await runDailyPayouts({ store, sender, now: new Date("2026-03-02T00:15:00Z") });
+    const first = await runDailyPayouts({ store, sender, now: new Date("2030-03-02T00:15:00Z") });
+    const second = await runDailyPayouts({ store, sender, now: new Date("2030-03-02T00:15:00Z") });
 
     expect(first.confirmed).toBe(1);
     expect(second.confirmed).toBe(0);
@@ -100,7 +100,7 @@ describe("daily payout processing", () => {
       .fn()
       .mockRejectedValueOnce(new PayoutTransferError("receipt reverted", false))
       .mockResolvedValueOnce({ transactionId: "0.0.100@1770000000.000000001" });
-    const options = { store, sender, now: new Date("2026-03-02T00:15:00Z") };
+    const options = { store, sender, now: new Date("2030-03-02T00:15:00Z") };
 
     expect((await runDailyPayouts(options)).failed).toBe(1);
     expect(rows.get(row.id)?.status).toBe("failed");
@@ -183,10 +183,10 @@ describe("daily payout processing", () => {
   });
 
   it("dates batches by UTC day, or the next midnight when paying through now", () => {
-    const evening = new Date("2026-11-06T21:30:00Z");
-    expect(payoutDate(evening)).toBe("2026-11-06");
-    expect(payoutDate(evening, true)).toBe("2026-11-07");
-    expect(payoutDate(new Date("2026-12-31T23:59:59Z"), true)).toBe("2027-01-01");
+    const evening = new Date("2030-11-06T21:30:00Z");
+    expect(payoutDate(evening)).toBe("2030-11-06");
+    expect(payoutDate(evening, true)).toBe("2030-11-07");
+    expect(payoutDate(new Date("2030-12-31T23:59:59Z"), true)).toBe("2031-01-01");
   });
 
   it("claims with the through-now date on a manual run", async () => {
@@ -197,8 +197,8 @@ describe("daily payout processing", () => {
       sender,
       manual: true,
       throughNow: true,
-      now: new Date("2026-11-06T21:30:00Z"),
+      now: new Date("2030-11-06T21:30:00Z"),
     });
-    expect(store.claimEligible).toHaveBeenCalledWith("2026-11-07");
+    expect(store.claimEligible).toHaveBeenCalledWith("2030-11-07");
   });
 });

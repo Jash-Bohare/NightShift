@@ -20,7 +20,7 @@ const agent: AgentRow = {
   resolver_address: null,
   register_tx: null,
   expiry: null,
-  created_at: "2026-01-01T00:00:00Z",
+  created_at: "2030-01-01T00:00:00Z",
 };
 const quote: QuoteClaims = {
   v: 1,

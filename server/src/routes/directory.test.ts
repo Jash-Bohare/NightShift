@@ -108,10 +108,10 @@ describe("toDirectoryAgent", () => {
 describe("effectiveStatus", () => {
   it("reports a lapsed name as expired so it is never listed as available", async () => {
     const { effectiveStatus, queryDirectory, DirectoryQuery } = await import("./directoryLogic.js");
-    const now = Date.parse("2026-12-06T00:00:00Z");
-    expect(effectiveStatus("active", "2026-12-05T00:00:00Z", now)).toBe("expired");
-    expect(effectiveStatus("active", "2026-12-07T00:00:00Z", now)).toBe("active");
-    expect(effectiveStatus("revoked", "2026-12-05T00:00:00Z", now)).toBe("revoked");
+    const now = Date.parse("2030-12-06T00:00:00Z");
+    expect(effectiveStatus("active", "2030-12-05T00:00:00Z", now)).toBe("expired");
+    expect(effectiveStatus("active", "2030-12-07T00:00:00Z", now)).toBe("active");
+    expect(effectiveStatus("revoked", "2030-12-05T00:00:00Z", now)).toBe("revoked");
     expect(effectiveStatus("active", null, now)).toBe("active");
     const agent = {
       label: "old",
@@ -125,8 +125,8 @@ describe("effectiveStatus", () => {
       model: null,
       description: null,
       reputation: null,
-      status: effectiveStatus("active", "2026-12-05T00:00:00Z", now),
-      expiry: "2026-12-05T00:00:00Z",
+      status: effectiveStatus("active", "2030-12-05T00:00:00Z", now),
+      expiry: "2030-12-05T00:00:00Z",
       updatedAt: "x",
     };
     expect(queryDirectory([agent], DirectoryQuery.parse({})).total).toBe(0);

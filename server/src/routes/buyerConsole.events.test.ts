@@ -54,12 +54,12 @@ describe("buyer console event recovery", () => {
         payload: {
           kind: "plan",
           runId: "run-1770000000000",
-          timestamp: "2026-03-02T00:00:00.000Z",
+          timestamp: "2030-03-02T00:00:00.000Z",
           task: { skill: "transcribe:ta", units: 2, file: "private/server/path.mp3" },
           rules: { allowedAssets: ["0.0.429274"] },
           privateKey: "must-not-appear",
         },
-        created_at: "2026-03-02T00:00:00.000Z",
+        created_at: "2030-03-02T00:00:00.000Z",
       },
     ];
     mocks.from.mockImplementation(() => ({
