@@ -20,4 +20,7 @@ export const publicEnv = Object.freeze({
     process.env.NEXT_PUBLIC_NIGHTSHIFT_REGISTRAR_ADDRESS ??
     "0x9564fFd96FBaA1bF10836966990aCc88a9865705",
   hederaHcsTopicId: process.env.NEXT_PUBLIC_HEDERA_HCS_TOPIC_ID ?? "",
+  // Hosted build (docs/06): hides sign-in, launch and dashboard, because 0G's Privy app only
+  // allows localhost origins. Directory, agent pages, console and landing stay available.
+  demoMode: process.env.NEXT_PUBLIC_DEMO_MODE === "true",
 });

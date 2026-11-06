@@ -61,6 +61,54 @@ export async function serverGet<T>(
   }
 }
 
+/** Authenticated JSON write (PATCH/POST) to the owner API, with the same error handling as GET. */
+export async function serverSend<T>(
+  path: string,
+  init: { method: "POST" | "PATCH"; body: unknown; bearerToken: string; timeoutMs?: number },
+): Promise<T> {
+  const controller = new AbortController();
+  const ms = init.timeoutMs ?? 20_000;
+  const timeout = setTimeout(() => controller.abort(), ms);
+  try {
+    const response = await fetch(`${publicEnv.serverUrl}${path}`, {
+      method: init.method,
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        authorization: `Bearer ${init.bearerToken}`,
+      },
+      body: JSON.stringify(init.body),
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (!response.ok) throw new ApiError(await errorMessage(response), response.status);
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (controller.signal.aborted)
+      throw new ApiError(`The server did not respond within ${Math.round(ms / 1000)} seconds.`);
+    throw new ApiError(
+      error instanceof Error ? error.message : "Could not reach the Nightshift server.",
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** The server's `{message}` for a failed response, else the HTTP status. */
+export async function errorMessage(response: Response): Promise<string> {
+  try {
+    const body: unknown = await response.json();
+    if (typeof body === "object" && body !== null && "message" in body) {
+      const message = (body as { message?: unknown }).message;
+      if (typeof message === "string" && message) return message;
+    }
+  } catch {
+    // Not JSON: fall back to the status.
+  }
+  return `Request failed (${response.status})`;
+}
+
 export interface NightshiftStats {
   agents: number;
   jobsToday: number;
