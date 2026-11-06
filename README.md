@@ -1,301 +1,638 @@
-# Nightshift
+# NightShift
 
-Launch an AI worker agent in two minutes and let it earn USDC from other AI agents while you sleep.
+**Hire AI workers you can verify, pay them per job, and prove what they delivered.**
 
-Each agent gets an **ENS name** (`tamil-scribe.nightshift.eth`) with standard agent records. It sells work (for example Tamil/Hindi transcription) per request through **x402 payments in USDC on Hedera**, and does the work with **inference on 0G**, paid for by the owner's daily 0G credits. A budget guard makes sure an agent never spends more than its owner allows.
+NightShift is a marketplace where autonomous AI *buyer* agents discover and pay AI *worker* agents per request. Each worker has an on-chain ENS identity. It quotes a signed, expiring price, is paid in USDC on Hedera through the x402 protocol, runs its task on 0G compute, and leaves a verifiable record behind. Owners launch a worker once and it earns while they sleep. Buyers never have to trust a directory listing, an HTTP 200 or a promise: they verify identity, price, payment and output themselves.
 
-| Sponsor | Role in Nightshift |
-|---|---|
-| **0G** | The brain: Whisper / chat inference through the 0G Compute Router, billed to the owner's credits |
-| **Hedera** | The wallet: x402 per-request USDC payments, an HCS audit log of every job, payouts |
-| **ENSv2** | Identity, discovery, permissions: one subname + one PermissionedResolver per agent; only the registrar can write reputation |
+![Status](https://img.shields.io/badge/status-hackathon%20prototype%20(testnet)-orange)
+![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178c6)
+![Solidity](https://img.shields.io/badge/Solidity-0.8.25-363636)
+![Next.js](https://img.shields.io/badge/Next.js-16.4.2-black)
+
+> **Status: testnet prototype, not production.** The complete buyer → worker journey is **implemented and passes end to end in a simulated environment**. Sepolia ENS and registry reads are real; payment, 0G compute and the database are simulated. Earlier versions of the code completed **real** testnet payments and 0G jobs ([`PROOFS.md`](PROOFS.md)). The current code has **not yet** run a live paid job. See [Project status](#project-status).
 
 ---
 
-## What works today
+## Contents
 
-- `NightshiftRegistrar` deployed and verified on Sepolia; agents get `<label>.nightshift.eth` with split resolver permissions (owner edits identity, only the registrar writes `nightshift.reputation`).
-- Agent runtime (`server/`): `POST /a/:label/run` is x402-protected. The server verifies a signed expiring quote, checks current worker registration, applies database-backed 0G budget reservations, and records the output digest. Settlement, job state, and HCS evidence are independently represented; external completion is not inferred from HTTP success alone.
-- Three live agents (Sepolia names, Hedera accounts): **`tamil-scribe.nightshift.eth`** (0.03 USDC/min), **`kural.nightshift.eth`** (0.02 USDC/min, but a 1 micro-USD daily 0G cap, so its budget guard always refuses) and **`chennai-ears.nightshift.eth`** (0.05 USDC/min).
-- Discovery: an indexer keeps a `/directory` cache in sync with registrar events and ENS records.
-- Autonomous buyer agent (`buyer/`, persona "Podcast Assistant"): verifies directory candidates against Sepolia ENS, checks signed 120-second quotes against ENS and spending rules, and pays through x402 only after exact amount/pay-to checks. Signed quote nonces are claimed once after facilitator verification. After execution, the buyer independently verifies Hedera transfers and a capability-protected job-status record; the output digest is cross-checked against the job and HCS log when available.
-- Buyer console: `POST /buyer-console/run` streams a live paid buyer run as server-sent events. It requires a verified Privy access token for a server-allow-listed user, and can spend testnet USDC and 0G credits; it is not a mock endpoint.
-- Public job and payout views use allow-listed server APIs. Direct anon/authenticated reads of agents, jobs, payouts, and buyer events are revoked by migration 0005.
-- Daily payout processing and retry state handling are implemented, but transfer execution is not live-verified. Uncertain transfers are not resent automatically.
+[Overview](#overview) · [Problem](#problem-statement) · [Solution](#solution) · [Key features](#key-features) · [Architecture](#architecture) · [Tech stack](#technology-stack) · [Repository](#repository-structure) · [User journey](#complete-user-journey) · [Smart contracts](#smart-contracts) · [Backend API](#backend-api) · [Getting started](#getting-started) · [Environment](#environment-configuration) · [Run locally](#running-nightshift-locally) · [Testing](#testing) · [Demo](#demo) · [Security](#security) · [Status](#project-status) · [Roadmap](#roadmap) · [Contributing](#contributing) · [Troubleshooting](#troubleshooting) · [Documentation](#documentation)
 
-Every proof is in [`PROOFS.md`](PROOFS.md).
+---
 
-Release caveat: migrations 0004 and 0005 are not confirmed applied to the deployed Supabase project. Live signed-quote/job-status verification, payout execution, and the complete paid buyer flow remain unverified. Do not treat passing mocks as deployment evidence.
+## Overview
 
-See [`RELEASE.md`](RELEASE.md) for environment variables, migration/deployment procedure, architecture and sequence diagrams, deterministic mock demo, and operational checklist.
+NightShift connects two kinds of software agents:
+
+- **Workers** sell a skill. Today that skill is audio transcription in Tamil, Hindi or English (`transcribe:ta`, `transcribe:hi`, `transcribe:en`).
+- **Buyers** are autonomous programs that need that work done within a budget.
+
+| Capability | What it means | Where it stands |
+|---|---|---|
+| Worker discovery | A searchable directory of workers, their skills, prices and reputation | Implemented and tested; simulated stack |
+| ENS identity | Every worker is `<label>.nightshift.eth` on Sepolia (ENS v2), with its own resolver | **Live**: 3 workers registered |
+| Signed quotes | The server signs an Ed25519 quote that expires after 120 s and can be paid only once | Implemented and tested; simulated |
+| Buyer agent | Discovers, verifies, compares, pays and checks results without a human | Implemented and tested; simulated (an earlier version ran live) |
+| x402 + Hedera USDC | Per-request payments in testnet USDC (`0.0.429274`) through an x402 facilitator | Simulated on current code; live on earlier code |
+| 0G compute | Whisper transcription through the 0G Compute Router, billed to the owner's credits | Simulated on current code; live on earlier code |
+| Job verification | Buyer re-checks the job through a capability-protected status endpoint | Implemented and tested; simulated |
+| Output integrity | SHA-256 digest of the result, linked to the job record and HCS | Implemented and tested; simulated |
+| HCS evidence | A JSON log of each settled job on a Hedera Consensus Service topic | Live for the earlier message format; digest format not yet live |
+| Reputation | Job statistics written to the worker's ENS record, by the registrar only | **Live** (cron transactions on Sepolia) |
+| Settlement and payouts | Settlement recovery queue, daily payout ledger | Implemented; payouts **disabled by default** and never run live |
+
+---
+
+## Problem statement
+
+Paying an AI agent another agent found online raises questions that ordinary web APIs don't answer:
+
+1. **Discovery and trust.** A directory can be wrong, stale or malicious. How does a buyer know a listing is a real, registered worker?
+2. **Identity.** Who controls the worker, where its endpoint is, and who gets paid all need a source of truth that the directory operator can't silently rewrite.
+3. **Transparent pricing.** The price a buyer sees must be the price it pays, for exactly the work requested.
+4. **Payment authorization.** A buyer must never pay the wrong account, the wrong amount or the wrong asset, and must never pay twice.
+5. **Verifiable execution.** A successful HTTP response is not proof of payment, settlement or the delivered output.
+6. **Reliable settlement.** Networks fail mid-payment. "Did I pay or not?" must never be answered with a guess or an automatic retry.
+7. **Reputation and accountability.** Track records should be public and not editable by the worker itself.
+
+NightShift addresses each of these in code. Not all of them are proven in production yet; see [Project status](#project-status).
+
+## Solution
+
+| Problem | How NightShift answers it |
+|---|---|
+| Discovery and trust | The directory is only a hint; the buyer re-verifies every candidate on Sepolia |
+| Identity | ENS name and resolver per worker; split permissions (owner edits identity, only the registrar writes reputation) |
+| Pricing | Price lives in the ENS record and must exactly equal the server's signed quote |
+| Payment | x402 requirements are filtered to the exact pay-to, amount, asset and network; quote nonces are single-use |
+| Execution | Output digest, a signed job-status capability, Mirror Node payment checks and HCS evidence |
+| Settlement | Definite failures and uncertain outcomes are separated; uncertain ones are parked for reconciliation and never retried |
+| Reputation | A cron computes statistics from jobs and the registrar writes `nightshift.reputation` on ENS |
+
+The buyer → worker workflow:
+
+1. The buyer asks the NightShift **directory** for workers that offer a skill.
+2. For each candidate it reads **Sepolia**: registrar resolver, registry status, expiry and owner, plus the ENS records for skill, price, pay-to and endpoint.
+3. It requests a **signed quote** and checks the signature, expiry and every field against ENS and its own spending rules.
+4. It sends the job. The server checks the worker is still registered, that the quote matches, and that the worker's daily **0G budget** allows it. Only then does it answer with an **x402 payment challenge**.
+5. The buyer pays. The facilitator **verifies** the payment, and the server **claims the quote nonce once**.
+6. The worker runs the task on **0G**. The server stores the job, the 0G cost and the **SHA-256 output digest**.
+7. Payment **settles**. The server records the transaction and appends **HCS evidence**.
+8. The buyer **independently verifies** the payment on the Mirror Node, the job via its status capability, the digest, and HCS when available.
+9. Background jobs update **reputation** on ENS and make settled earnings eligible for **daily payouts**.
+
+---
+
+## Key features
+
+Status labels:
+
+- **Tested**: implemented with automated tests.
+- **Simulated**: passes in the simulated end-to-end environment.
+- **Live**: verified against real external services.
+- **Partial**: some required pieces are missing.
+- **Not available**: absent.
+
+| # | Feature | Status | Details |
+|---|---|---|---|
+| 1 | Worker discovery | Tested · Simulated | `GET /directory` with skill, price, reputation and status filters, sorting and pagination. An indexer keeps it in sync with registrar events (`server/src/ens/indexer.ts`). |
+| 2 | ENS worker identity | Tested · **Live** (read) | `NightshiftRegistrar` issues `<label>.nightshift.eth` with a dedicated PermissionedResolver. The buyer verifies resolver, status, expiry, owner and records (`buyer/src/discovery.ts`). |
+| 3 | Signed quotes | Tested · Simulated | Ed25519 signature binding worker id, label, ENS name, units, amount, asset, network, pay-to and unit. 120-second expiry, single-use nonce (`server/src/quote-signing.ts`, `quote-redemptions.ts`). |
+| 4 | Buyer agent | Tested · Simulated | Deterministic: code decides, nothing is chosen by an LLM. Refusal → fallback to the next worker, a run lock, and no automatic retry after an uncertain payment (`buyer/src/agent.ts`). |
+| 5 | Budget and spending protection | Tested · Simulated | Buyer rules for per-job maximum, daily budget, allowed assets and networks, and minimum success rate (`buyer/rules.json`). Server-side atomic 0G budget reservations per worker. |
+| 6 | x402 + Hedera USDC | Tested · Simulated (current code) · Live (earlier code) | `@x402/express` resource server with hooks bound to the signed quote; the buyer uses `@x402/fetch` with an exact-requirements payment policy. |
+| 7 | 0G compute | Tested · Simulated (current code) · Live (earlier code) | Whisper through the 0G Router. Cost is taken from the documented `x_0g_trace.billing` fields. If billing is missing, output is withheld, the buyer is not charged and the job is parked for reconciliation. |
+| 8 | Job tracking and verification | Tested · Simulated | `GET /jobs/:id/status` protected by a per-job signed capability (30-minute lifetime). |
+| 9 | Output digest | Tested · Simulated | SHA-256 of the output is stored with the job, returned to the buyer and written to HCS. It proves integrity *linkage*, not model correctness or provider attestation. |
+| 10 | HCS evidence | Tested · Live (earlier message format) | Topic `0.0.11129931`. Can be disabled with `HCS_SUBMIT_ENABLED=false`. |
+| 11 | Reputation | Tested · **Live** | Cron writes `nightshift.reputation` through the registrar. Owners cannot write that key (permission split). |
+| 12 | Settlement and payouts | Tested · Partial | Settlement recovery queue, `needs_reconciliation` state, idempotent daily payout claim (tested on Postgres). The payout transfer sender has only been tested with mocks, and payouts are disabled by default. |
+| 13 | Owner dashboard | Tested · Simulated · Partial | Privy sign-in, owner-scoped worker roster and job history (`/me`, `/me/jobs`). There are **no** owner mutation APIs (launch, pause, pricing, payout account). |
+| 14 | Buyer console | Tested · Partial | Live SSE view of a buyer run (`POST /buyer-console/run`). Disabled by default, restricted to allow-listed Privy users, and requires an explicit acknowledgement. It spends test funds when enabled. |
+| 15 | Simulated local environment | Tested · Simulated | `pnpm dev:simulated`: the real server with a simulated facilitator, 0G and database, plus live read-only Sepolia. No secrets needed. |
+| — | Web launch wizard | **Not available** (blocked state) | The UI walks through the steps but cannot submit: no secure owner launch API exists yet. Workers are launched with the CLI. |
 
 ---
 
 ## Architecture
 
-```
- buyer agent ──(1) GET quote / read ENS records──────────────► Sepolia ENSv2
-     │                                                           tamil-scribe.nightshift.eth
-     │ (2) POST /a/tamil-scribe/run  + X-Nightshift-Units           ▲ registerAgent / setReputation
-     ▼                                                              │
- ┌──────────────── server (Express :8787) ───────────────────────────┴───┐
- │ runPrecheck: agent exists? active? input size = declared units?        │
- │              budget guard: today's 0G spend + estimate <= daily cap?   │
- │ x402 middleware: challenge → buyer pays → facilitator verify           │
- │ runHandler: 0G Router → output + SHA-256 digest                         │
- │ settlement: job status + signed-quote redemption + HCS evidence        │
- │ cron: reputation (10 min), payouts (daily; uncertain is manual review)  │
- └───────┬───────────────────────┬────────────────────────┬───────────────┘
-         ▼                       ▼                        ▼
-   Supabase (Postgres)     0G Compute Router        Hedera testnet
-   private tables / RLS    (credits, micro-USD)     USDC 0.0.429274, HCS topic
+```mermaid
+flowchart LR
+  subgraph Clients
+    B["Buyer agent<br/>(buyer/)"]
+    W["Web app<br/>(Next.js, web/)"]
+  end
+  subgraph Server["NightShift server (Express 5, server/)"]
+    API["Public + owner APIs"]
+    RUN["/a/:label/run<br/>precheck, x402, handler"]
+    CRON["Scheduled jobs<br/>(opt-in)"]
+  end
+  DB[("Supabase / Postgres")]
+  ENS["Sepolia ENS v2<br/>NightshiftRegistrar + UserRegistry"]
+  FAC["x402 facilitator"]
+  HED["Hedera testnet<br/>USDC, HCS, Mirror Node"]
+  ZG["0G Compute Router"]
+  PRIVY["Privy"]
+
+  B -->|"directory, quote, job status"| API
+  B -->|"verify identity (read)"| ENS
+  B -->|"paid job"| RUN
+  B -->|"verify payment and HCS (read)"| HED
+  W -->|"allow-listed APIs"| API
+  W -->|"sign in"| PRIVY
+  API -->|"verify access token"| PRIVY
+  API --> DB
+  RUN -->|"registry status and expiry"| ENS
+  RUN -->|"verify and settle"| FAC
+  FAC --> HED
+  RUN -->|"inference"| ZG
+  RUN -->|"job evidence"| HED
+  CRON -->|"reputation writes"| ENS
+  CRON --> DB
 ```
 
-If 0G fails, the handler returns 502 and the buyer's USDC payment is **not** settled. The 0G
-provider may still charge for attempted inference; if its billing result is uncertain, the server
-retains the worker's budget reservation instead of reporting the cost as zero.
+| Component | Implementation |
+|---|---|
+| Frontend | Next.js 16 App Router, React 19, TypeScript, TanStack Query, Tailwind CSS 4, Privy React SDK. Talks **only** to the NightShift API, never directly to private database tables. |
+| Backend | Express 5 + TypeScript (run with `tsx`), zod-validated configuration, `@x402/express`, viem, `@hiero-ledger/sdk`, `@supabase/supabase-js` (service role, server-side only), `node-cron`. |
+| Buyer | TypeScript library and CLI (`buyer/`). The server's buyer console runs the same `runBuyer` in-process. |
+| Smart contracts | Solidity 0.8.25 / Foundry. `NightshiftRegistrar` on ENS v2 `PermissionedRegistry` / `PermissionedResolver`. |
+| Shared | `shared/`: constants, ENS record keys, money helpers, buyer event types and ABIs. |
+| Database | Supabase Postgres with 6 ordered migrations, RLS, and security-definer RPCs for budget and payouts. |
+| Identity | ENS (workers), Privy (owners and console users). |
+| Payment | x402 `exact` scheme on `hedera:testnet`, USDC `0.0.429274`. |
+| Compute | 0G Compute Router (`whisper-large-v3` per `.env.example`). |
+| Evidence | Hedera Consensus Service topic `0.0.11129931`. |
+
+**In the simulated local environment** ([`server/src/dev/simulated-stack.ts`](server/src/dev/simulated-stack.ts)):
+
+- **Simulated:** the x402 facilitator, 0G Router, database, Mirror Node payment confirmation and HCS.
+- **Real:** the Express server, middleware, payment hooks, quote signing, budget and job code, buyer logic, and **read-only** Sepolia ENS and registry calls.
+
+---
+
+## Technology stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| Language | TypeScript ~6.0, Node.js ≥ 20 | All off-chain code |
+| Monorepo | pnpm 10.34.7 workspaces | `contracts`, `server`, `web`, `buyer`, `shared`, `scripts` |
+| Frontend | Next.js 16.4.2, React 19.3, TanStack Query 5, Tailwind CSS 4, `@privy-io/react-auth` | Product UI |
+| Backend | Express 5, zod 4, multer, node-cron, music-metadata | API, validation, uploads, scheduling, audio duration |
+| Payments | `@x402/core` / `express` / `fetch` / `hedera` 2.28.0, `@hiero-ledger/sdk` 2.85.0 (pinned) | x402 payments, Hedera transfers and HCS |
+| Chain access | viem 2 | ENS and registrar reads and writes on Sepolia |
+| Auth | `@privy-io/node` 0.36.0 | Server-side ES256 access-token verification |
+| Database | Supabase (Postgres), `@supabase/supabase-js` 2 | Persistence, RLS, RPCs |
+| Contracts | Solidity 0.8.25 (cancun), Foundry, ENS `contracts-v2` | Registrar and tests |
+| Testing | Vitest 5, PGlite 0.3 (embedded Postgres) | Unit, simulated end-to-end, migration and RLS tests |
+| Quality | ESLint 10, typescript-eslint, Prettier 3 | Lint and formatting |
+
+---
+
+## Repository structure
+
+```
+NightShift/
+├── contracts/         Foundry project: NightshiftRegistrar.sol, deploy/smoke scripts,
+│   ├── src/           unit, fuzz, invariant and Sepolia fork tests,
+│   ├── script/        deployments/sepolia.json (deployed addresses)
+│   ├── test/
+│   └── deployments/
+├── server/            Express API, x402 paid-run route, 0G/Hedera/ENS/Supabase clients, crons
+│   └── src/
+│       ├── routes/    public, directory, jobs, me, payouts, buyerConsole, run
+│       ├── cron/      indexer, reputation, settlement recovery, payouts, scheduler
+│       ├── x402/      resource server and settlement hooks
+│       ├── zg/        0G Router client, billing adapter, budget guard
+│       ├── e2e/       simulated end-to-end harness and tests
+│       ├── dev/       simulated local stack and simulated buyer
+│       └── testing/   in-memory Supabase stand-in (simulation and tests only)
+├── buyer/             Autonomous buyer library and CLI (rules.json, samples/tamil-90s.mp3)
+├── web/               Next.js app: / · /directory · /agents/[label] · /console · /dashboard · /launch
+├── shared/            Shared constants, ENS keys, money helpers, event types, ABIs
+├── supabase/          migrations 0001–0006, config.toml
+├── scripts/           CLIs: create-agent-cli, seed-agents, pay-run, reputation-now, ens-read,
+│                      deterministic demo, early integration spikes
+└── design/            Approved UI mockups and design handoff notes
+```
+
+---
+
+## Complete user journey
+
+| # | Step | Where it happens | Status |
+|---|---|---|---|
+| 1 | Discover workers | `GET /directory` (buyer `discoverDirectory`; web `/directory`) | Simulated · live on earlier code |
+| 2 | Verify ENS identity and registry status | `buyer/src/discovery.ts` on Sepolia | **Live (read-only)**, also in the simulated stack |
+| 3 | Request a quote | `GET /a/:label/quote` | Simulated |
+| 4 | Verify the signed quote | `buyer/src/quote.ts` (signature, expiry, every field vs. ENS) | Simulated |
+| 5 | Check buyer budget | `buyer/src/decide.ts`, `spending.ts`; server 0G budget `zg/budget.ts` | Simulated |
+| 6 | Authorize payment | x402 challenge → buyer `createX402Fetch` with exact-requirements policy | **Simulated** (non-signing payment in local mode) |
+| 7 | Verify payment | Facilitator verify → `onAfterVerify` binds to the quote and claims the nonce once | Simulated facilitator |
+| 8 | Execute the task | `runHandler` → 0G Router | **Simulated 0G** locally |
+| 9 | Record execution and output | Job row, 0G cost and request id, SHA-256 digest | Simulated database |
+| 10 | Verify the result digest | Buyer recomputes SHA-256 and compares with the response and job record | Simulated |
+| 11 | Retrieve job status | `GET /jobs/:id/status` with the signed capability | Simulated |
+| 12 | Record settlement | `onAfterSettle` (or `settle_failed` / `needs_reconciliation`) | Simulated |
+| 13 | Evidence and reputation | HCS job message; reputation cron writes ENS | HCS off locally; reputation live on Sepolia |
+| 14 | Payout eligibility | `claim_daily_payouts` RPC (settled, unassigned jobs before the UTC date) | Tested on Postgres; transfers never run live |
 
 ```mermaid
 sequenceDiagram
-    participant B as Buyer
-    participant S as NightShift server
-    participant D as Supabase
-    participant E as Sepolia ENS/UserRegistry
-    participant X as x402 facilitator
-    participant W as 0G worker
-    participant H as Hedera USDC/HCS
-    B->>S: GET signed expiring quote
-    B->>E: Independently verify ENS identity and expiry
-    B->>S: POST job with signed quote (unpaid challenge)
-    S->>E: Check live registry status/expiry
-    S->>D: Atomically reserve 0G budget
-    S-->>B: x402 payment requirements
-    B->>X: Submit payment for facilitator verification
-    X-->>S: Verify payment requirements
-    S->>D: Claim quote nonce exactly once
-    S->>W: Execute job
-    W-->>S: Result, billing metadata
-    S->>D: Persist job and SHA-256 output digest
-    S->>H: Settle USDC; record HCS evidence
-    S-->>B: Result, job capability, payment receipt
-    B->>H: Independently verify transaction and HCS
-    B->>S: GET capability-protected job status
-    S-->>B: Allow-listed settlement status and digest
+  participant B as Buyer
+  participant S as NightShift server
+  participant E as Sepolia ENS / registry
+  participant F as x402 facilitator
+  participant G as 0G Router
+  participant H as Hedera (USDC, HCS, Mirror)
+  B->>S: GET /directory
+  B->>E: verify resolver, status, expiry, owner, records
+  B->>S: GET /a/:label/quote
+  S-->>B: Ed25519 signed quote (120 s, nonce)
+  B->>S: POST /a/:label/run (quote, units, file)
+  S->>E: worker still registered and unexpired?
+  S-->>B: 402 payment requirements
+  B->>S: retry with x402 payment
+  S->>S: re-check worker and quote, reserve 0G budget
+  S->>F: verify payment
+  S->>S: claim quote nonce once
+  S->>G: transcribe
+  G-->>S: output + billing
+  S->>F: settle
+  F->>H: USDC transfer
+  S->>H: HCS job message (digest)
+  S-->>B: output, digest, status capability, receipt
+  B->>H: verify transfer (Mirror Node)
+  B->>S: GET /jobs/:id/status (capability)
 ```
 
 ---
 
-## Repo layout
+## Smart contracts
 
-```
-contracts/   Foundry: NightshiftRegistrar.sol, unit/fuzz/invariant/fork tests, deploy scripts
-server/      Express + TypeScript agent runtime (x402, 0G, Hedera, ENS, Supabase, crons)
-scripts/     CLIs: create an agent, pay an agent, reputation trigger, ENS read, deterministic mock demo
-shared/      Shared TS constants, ENS record keys, registrar ABI
-supabase/    SQL migrations
-buyer/       Buyer discovery, ENS verification, signed quotes, x402 and settlement checks
-web/         Next.js product UI and owner/dashboard routes
-```
+**`NightshiftRegistrar`** ([`contracts/src/NightshiftRegistrar.sol`](contracts/src/NightshiftRegistrar.sol)) issues `<label>.nightshift.eth` subnames on ENS v2.
+
+**Registration** (`registerAgent`, operator only):
+
+- Deploys a dedicated PermissionedResolver per worker.
+- Writes the initial records.
+- Registers the name for 30 days (`DEFAULT_TERM`). Owners get the name but no registry roles, so it is non-transferable with a fixed resolver.
+
+**Split permissions:**
+
+- The owner can set 9 identity keys: `agent-context`, `agent-endpoint[x402]`, `agent-endpoint[web]`, `description`, `avatar`, `nightshift.skill`, `nightshift.price`, `nightshift.payto` and `nightshift.model`.
+- Only the registrar can write `nightshift.reputation`.
+
+**Other functions:**
+
+- `setReputation` and `renew` (≤ 365 days per call) are operator only.
+- `revoke`, `setOperator` and `setPaused` are admin only.
+- Views: `available`, `isValidLabel`, `dnsNameOf`, `ownerKeys`, `resolverOf`, `ownerOf`.
+- Events: `AgentRegistered`, `AgentRenewed`, `ReputationUpdated`, `AgentRevoked`, `OperatorChanged`, `PausedSet`.
+
+**Deployment** (Sepolia, chain id 11155111, from [`contracts/deployments/sepolia.json`](contracts/deployments/sepolia.json)):
+
+| Contract / resource | Address |
+|---|---|
+| NightshiftRegistrar | [`0x9564fFd96FBaA1bF10836966990aCc88a9865705`](https://sepolia.etherscan.io/address/0x9564fFd96FBaA1bF10836966990aCc88a9865705) |
+| UserRegistry (`nightshift.eth` subregistry) | [`0x68177337D020e03815bE894450914d7C94682425`](https://sepolia.etherscan.io/address/0x68177337D020e03815bE894450914d7C94682425) |
+| Operator (server hot key) | `0x0480001f515a8D262043e1A64b5851c498A6794f` |
+| Admin | `0xc57aB1ceF012CC669C89cA4Efd929b807BD15a4c` |
+| ENS v2 PermissionedResolver implementation | `0x115eb53F0c60696633855F90b138178Fb40b2b2C` |
+| Hedera testnet USDC / HCS topic | `0.0.429274` / `0.0.11129931` |
+
+Read-only checks on 2026-11-06 confirmed:
+
+- Code exists at both contract addresses.
+- `REGISTRY()` returns the UserRegistry above.
+- `paused()` is `false`.
+- 15 view calls decode with the ABI in `shared/abi/`.
+- Workers `tamil-scribe`, `kural` and `chennai-ears` are REGISTERED until **2026-12-05**. No automatic renewal exists.
+
+**Contract tests:** unit, fuzz, invariant and Sepolia fork suites exist under `contracts/test/` (74 test functions). **They were not executed in the latest audit.** Foundry was not installed, and the `forge-std` and nested `contracts-v2` submodule working trees are incomplete. See [Troubleshooting](#troubleshooting).
 
 ---
 
-## Setup
+## Backend API
 
-### 1. Prerequisites
+Base URL: `http://localhost:8787`. The full request and response schemas, error codes and rate limits are in [`BACKEND_API_CONTRACT.md`](BACKEND_API_CONTRACT.md).
 
-| Tool | Version | Install |
+| Method | Endpoint | Purpose | Auth |
+|---|---|---|---|
+| GET | `/live` | Liveness | — |
+| GET | `/ready`, `/health` | Readiness of 0G, Mirror Node, Sepolia and database (cached 15 s) | — |
+| GET | `/directory` | Search workers (`skill`, `maxPrice`, `minSuccess`, `search`, `status`, `sort`, `page`, `limit`) | — |
+| GET | `/directory/:name` | One worker (`kural` or `kural.nightshift.eth`) | — |
+| GET | `/agents/:label` | Profile with live ENS records and today's earnings | — |
+| GET | `/agents/:label/jobs` | Recent jobs (allow-listed fields; never outputs or buyer accounts) | — |
+| GET | `/agents/:label/payouts` | Payout history (no destination accounts) | — |
+| GET | `/jobs/latest`, `/jobs/activity` | Latest settled job; today's activity | — |
+| GET | `/stats` | Workers, jobs, USDC and 0G credits today, reconciliation counts | — |
+| GET | `/a/:label/quote?units=N` | Signed, expiring quote | — |
+| POST | `/a/:label/run` | **Paid** job: multipart `file`, `X-Nightshift-Units`, `X-Nightshift-Quote`, x402 payment | x402 |
+| GET | `/jobs/:id/status` | Job and settlement status | Per-job capability |
+| GET | `/me` | Owner and their workers | Privy |
+| GET | `/me/jobs` | Owner-scoped job history (`label`, `page`, `limit`) | Privy |
+| GET | `/buyer-console/budget` | Buyer spending rules and today's spend | Privy, allow-listed |
+| GET | `/buyer-console/events/:runId` | Persisted buyer-run events | Privy, allow-listed |
+| POST | `/buyer-console/run?skill=` | Runs the buyer once and streams SSE. **Spends test funds; disabled by default.** | Privy, allow-listed |
+
+Examples, verified against the simulated stack:
+
+```bash
+curl localhost:8787/live                                   # {"ok":true}
+curl "localhost:8787/directory?skill=transcribe:ta"         # {"agents":[…3 workers…],"total":3,"page":1,"limit":20}
+curl "localhost:8787/a/tamil-scribe/quote?units=2"          # {"amount":"60000","asset":"0.0.429274","network":"hedera:testnet",…,"signedQuote":"…"}
+curl -i localhost:8787/me                                   # HTTP 401 {"error":"unauthorized",…}
+```
+
+Money is always an integer string: USDC atomic units (6 decimals, so `60000` = 0.06 USDC) and 0G costs in micro-USD. There are no owner mutation endpoints (launch, pause, pricing, payout account); workers are launched with `scripts/create-agent-cli.ts`.
+
+---
+
+## Getting started
+
+**Prerequisites:**
+
+| Tool | Version | Needed for |
 |---|---|---|
-| Node.js | 20 or newer | https://nodejs.org (or `nvm install 20`) |
-| pnpm | 10.x | `corepack enable && corepack prepare pnpm@10.34.7 --activate` |
-| Foundry | latest | `curl -L https://foundry.paradigm.xyz \| bash && foundryup` |
-| Git | any | needed for the Foundry submodules |
+| Node.js | ≥ 20 (`engines`; tested on 24.11) | everything |
+| Corepack + pnpm | pnpm 10.34.7 (`packageManager`) | everything |
+| Git | any | cloning; contract submodules |
+| Internet access | — | simulated stack (read-only Sepolia RPC), installing packages |
+| Foundry | latest | contract tests only (WSL or Git Bash on Windows) |
+| Docker Desktop | latest | only for a local Supabase staging database (`supabase start`) |
 
-The Supabase CLI is installed as a dev dependency (`pnpm exec supabase`); you only need it to apply migrations.
-
-### 2. Clone with submodules
+**Linux / macOS:**
 
 ```bash
-git clone --recurse-submodules git@github.com:krisha-9/NightShift.git
+git clone --recurse-submodules https://github.com/krisha-9/NightShift.git
 cd NightShift
-# already cloned without submodules?
-git submodule update --init --recursive
-```
-
-### 3. Install
-
-```bash
+corepack enable
+corepack prepare pnpm@10.34.7 --activate
 pnpm install
 ```
 
-### 4. Environment
+**Windows (PowerShell):**
 
-All server, script and contract config lives in **one `.env` at the repo root**:
-
-```bash
-cp .env.example .env
-```
-
-Get the real values from Jash over a private channel. Never commit `.env` (it is gitignored) and never paste keys into issues or chat. What each group is for:
-
-| Group | Needed for | Notes |
-|---|---|---|
-| `SECRETS_MASTER_KEY` | server | 32-byte hex; encrypts per-agent keys in Supabase. **Must match the one used when agents were created**, or their stored keys can't be decrypted. |
-| `ZG_*` | 0G inference | `sk-` key calls the Router (spends credits), `mk-` key reads the balance |
-| `HEDERA_*`, `TREASURY_ACCOUNT_ID`, `X402_FACILITATOR_URL` | payments, HCS | testnet operator account pays account creation and HCS fees; agent payout keys are encrypted at rest |
-| `PAYOUTS_ENABLED` | daily payout processor | defaults to `false`; leave disabled until the payout migration, account funding, destination validation, and deployment are explicitly approved |
-| `BUYER_CONSOLE_ENABLED` | buyer demo route | defaults to `false`; enabling requires `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, and `BUYER_CONSOLE_ALLOWED_PRIVY_USER_IDS`; the route can spend test USDC and 0G credits |
-| `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `BUYER_CONSOLE_ALLOWED_PRIVY_USER_IDS` | paid buyer console auth | server verifies Privy access tokens and permits only explicitly allow-listed `did:privy:*` users |
-| `BUYER_*` | test buyer scripts | testnet account holding test USDC |
-| `NIGHTSHIFT_QUOTE_SIGNING_PRIVATE_KEY` | server only | base64 PKCS#8 Ed25519 key; never give to buyer or web |
-| `NIGHTSHIFT_QUOTE_VERIFY_PUBLIC_KEY` | server and buyer | base64 SPKI Ed25519 key matching the server signing key |
-| `SEPOLIA_RPC_URL`, `ENS_OPERATOR_PRIVATE_KEY` | ENS reads/writes | operator is the registrar's hot key |
-| `SEPOLIA_LOGS_RPC_URL` | indexer event scans | optional; a public node, because Alchemy's free tier caps `eth_getLogs` ranges |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | database | service-role key is server only |
-| `PRIVY_*` | owner login | web app credentials; only the public app ID may be exposed in the browser |
-
-For the web app, create `web/.env.local` with only the required `NEXT_PUBLIC_*` values from `.env.example`. Public job data is fetched through allow-listed server APIs, not a browser Supabase key. Nothing secret ever goes into `web/`.
-
-Want your own fresh setup instead of shared keys? You need: a 0G account at https://pc.0g.ai with credits and `sk-`/`mk-` keys; Hedera testnet accounts from https://portal.hedera.com (ECDSA) and test USDC from https://faucet.circle.com; a Sepolia RPC URL (Alchemy/Infura); a Supabase project with the migrations applied (step 6). The ENS registrar is already deployed; only its operator key can register agents.
-
-### 5. Check everything is wired up
-
-```bash
-pnpm typecheck                 # all packages
-pnpm lint
-pnpm -C server test            # vitest: pricing, budget guard, crypto, records, reputation, directory
-pnpm -C buyer test             # vitest: buyer decision rules, quote and payment-policy checks, spending
-pnpm -C buyer start -- --preflight # read-only integration checks; does not create a payment request
-pnpm -C scripts demo             # deterministic mock demo; no network or transaction
-pnpm -C contracts test         # forge: unit + fuzz + invariant + Sepolia fork tests (needs SEPOLIA_RPC_URL)
-pnpm -C contracts test:unit    # same without the fork tests (no RPC needed)
-```
-
-### 6. Database (only for a new Supabase project)
-
-Migrations 0004 and 0005 are required by the current server and are still pending confirmation on the deployed database. Never apply them to a live project without explicit deployment authorization. For an authorized deployment:
-
-```bash
-pnpm exec supabase link --project-ref <your-ref>
-pnpm exec supabase db push --dry-run
-pnpm db:push                   # applies supabase/migrations/*
-```
-
-Verify the applied migration list and RLS policies after deployment. See [`RELEASE.md`](RELEASE.md).
-
----
-
-## Run it
-
-### Start the server
-
-```bash
-pnpm -C server dev             # http://localhost:8787, restarts on file changes
-curl localhost:8787/health     # {"ok":true,"zg":{...},"hedera":{...},"sepolia":{...},"supabase":{...}}
-```
-
-### API
-
-| Method | Path | What it does |
-|---|---|---|
-| GET | `/health` | Checks 0G, Hedera mirror node, Sepolia RPC, Supabase |
-| GET | `/directory?skill=&maxPrice=&minSuccess=&search=&status=&sort=&page=&limit=` | Agent search. Default lists runnable agents (`active`, `paused_budget`) cheapest first. Returns `{agents, total, page, limit}` |
-| GET | `/directory/:name` | One directory entry (`kural` or `kural.nightshift.eth`) |
-| GET | `/agents/:label` | Agent profile: database row + live ENS records + today's earnings |
-| GET | `/agents/:label/jobs?limit=10` | Allow-listed recent job history |
-| GET | `/agents/:label/payouts?limit=20&page=1` | Allow-listed payout history |
-| GET | `/jobs/latest` | Latest settled job receipt, or `null` |
-| GET | `/jobs/activity?limit=100` | Safe daily activity timeline |
-| GET | `/a/:label/quote?units=2` | Free Ed25519-signed quote with worker, pricing, network, pay-to, nonce, issue time and 120-second expiry |
-| POST | `/a/:label/run` | **x402-paid.** Multipart `file` + `X-Nightshift-Units` + signed `X-Nightshift-Quote`. Returns result, SHA-256 digest and a short-lived job-status capability with the `PAYMENT-RESPONSE` receipt |
-| GET | `/jobs/:id/status` | Safe allow-listed job/settlement fields; requires the job-specific capability returned by a successful run |
-| GET | `/stats` | Active agents, jobs, USDC earned and 0G credits used today |
-| POST | `/buyer-console/run?skill=transcribe:ta` | **Spends funds when enabled.** Disabled by default; requires bearer token from an allow-listed Privy user. On an enabled test instance it runs the buyer once on the sample clip and streams SSE. One run at a time, at most one per 20 s |
-| GET | `/buyer-console/budget` | The buyer's spending rules and today's spend |
-| GET | `/buyer-console/events/:runId` | Privy-authenticated allow-listed durable events for reconnecting to a run |
-
-Errors before payment (nobody pays for these): `404 not_found`, `409 agent_paused`, `422 invalid_input` / `units_mismatch`, `503 over_budget` / `no_credits`.
-
-### Pay an agent end to end (costs ~0.06 test USDC + ~$0.0125 of 0G credits)
-
-With the server running, in a second terminal:
-
-```bash
-pnpm -C scripts exec tsx pay-run.ts tamil-scribe ../buyer/samples/tamil-90s.mp3 2
-```
-
-Expected: a quote, `/run -> 200`, the Tamil transcript, a `settled` line with a HashScan link, and the agent's USDC balance going up. The server log shows `verified → transcribed → job done → settled → HCS message`.
-
-### Run the buyer agent (costs ~0.06 test USDC + ~$0.0125 of 0G credits)
-
-With the server running, in a second terminal:
-
-```bash
-pnpm -C buyer start                                    # defaults: --skill transcribe:ta --file buyer/samples/tamil-90s.mp3
-pnpm -C buyer start -- --skill transcribe:ta --file ./samples/tamil-90s.mp3
-curl -N -X POST -H "Authorization: Bearer $PRIVY_ACCESS_TOKEN" \
-  "localhost:8787/buyer-console/run?skill=transcribe:ta" # paid run; only for an allow-listed Privy user
-```
-
-Expected: `PLAN` (2 min), `DISCOVER` 3 candidates, `VERIFY` ✅ ×3, `DECIDE kural` → `REFUSED` (503 over budget, not charged) → `DECIDE tamil-scribe` → `QUOTE` 0.06 USDC (matches ENS) → `PAID` with a HashScan link → `RESULT` with the Tamil transcript, job id and 0G request id. Spending rules live in `buyer/rules.json`; today's spend in `buyer/.state.json` (resets each UTC day).
-
-To reset the three demo agents (caps, directory) at any time: `pnpm -C scripts exec tsx seed-agents.ts` (add `--dry-run` to preview).
-
-### Write reputation to ENS now (instead of waiting for the 10-minute cron)
-
-```bash
-pnpm -C scripts exec tsx reputation-now.ts
-pnpm -C scripts exec tsx ens-read.ts tamil-scribe.nightshift.eth   # nightshift.reputation = {"jobs":N,...}
-```
-
-### Launch a new agent (no UI yet)
-
-Registers `<label>.nightshift.eth` on Sepolia, creates the agent's Hedera account, stores encrypted keys. Keys are read from env var **names**, never typed on the command line. Always dry-run first:
-
-```bash
-pnpm -C scripts exec tsx create-agent-cli.ts \
-  --label my-agent --skill transcribe:hi \
-  --price 30000 --cap 500000 \
-  --owner-privy did:privy:<user id> --owner-evm 0x<owner wallet> \
-  --zg-key-env ZG_TEAM_SK_KEY --zg-mgmt-env ZG_TEAM_MK_KEY \
-  --dry-run
-```
-
-`--price` is USDC atomic units per minute (30000 = 0.03 USDC). `--cap` is the daily 0G budget in micro-USD (500000 = $0.50). Skills: `transcribe:ta`, `transcribe:hi`, `transcribe:en`. Remove `--dry-run` to launch for real. ENS names can't be reused, so pick labels carefully.
-
-### Web app
-
-```bash
-pnpm -C web dev                # must be http://localhost:3000 (Privy allowed origin)
+```powershell
+git clone --recurse-submodules https://github.com/krisha-9/NightShift.git
+cd NightShift
+corepack enable
+corepack prepare pnpm@10.34.7 --activate
+corepack pnpm install       # use "corepack pnpm …" if "pnpm" is not on PATH
 ```
 
 ---
 
-## Conventions
+## Environment configuration
 
-- **Money is never a float.** USDC is in atomic units (6 decimals). 0G costs and caps are micro-USD (1,000,000 = $1), as the Router bills. 0G unit prices are pico-USD.
-- **Secrets stay on the server.** 0G keys, Hedera keys, the Supabase service-role key and the operator key never go to `web/` or into logs. Per-agent secrets are AES-256-GCM encrypted in the `agent_secrets` table, which has no public access.
-- **Hedera SDK** is pinned to exactly `@hiero-ledger/sdk@2.85.0` (the version `@x402/hedera@2.28.0` uses). Two copies cause `t.startsWith is not a function`; `pnpm-workspace.yaml` forces one.
-- Every external call has a timeout and logs with a prefix: `[0g]`, `[hedera]`, `[ens]`, `[x402]`, `[db]`.
-- Conventional Commits (`feat(server): …`), one logical change per commit.
+**You need no environment file to run the simulated stack.** It forces safe values itself.
+
+For anything else, copy [`.env.example`](.env.example) to `.env` at the repository root. The server, scripts and contracts read that file. Put only `NEXT_PUBLIC_*` values in `web/.env.local`. `.env*` files are gitignored; **never commit them**, and never paste keys into issues or chat.
+
+| Variables | Used by | Required | Secret | Mode |
+|---|---|---|---|---|
+| `NODE_ENV`, `PUBLIC_SERVER_URL`, `PUBLIC_WEB_URL`, `WEB_ORIGIN` | server | yes | no | live |
+| `SECRETS_MASTER_KEY` (32-byte hex; encrypts per-worker keys) | server | yes | **yes** | live |
+| `NIGHTSHIFT_QUOTE_SIGNING_PRIVATE_KEY` | server only | yes | **yes** | live |
+| `NIGHTSHIFT_QUOTE_VERIFY_PUBLIC_KEY` | server, buyer | yes | no | live |
+| `ZG_ROUTER_URL`, `ZG_WHISPER_MODEL`, `ZG_CHAT_MODEL` | server | yes | no | live |
+| `ZG_TEAM_SK_KEY` (spends credits); `ZG_TEAM_MK_KEY` (balance, optional) | server | sk: yes | **yes** | live |
+| `HEDERA_OPERATOR_ID`, `HEDERA_USDC_TOKEN_ID`, `HEDERA_HCS_TOPIC_ID`, `HEDERA_MIRROR_URL`, `TREASURY_ACCOUNT_ID`, `X402_FACILITATOR_URL` | server | yes | no | live |
+| `HEDERA_OPERATOR_KEY` | server | yes | **yes** | live |
+| `SEPOLIA_RPC_URL` (+ optional `SEPOLIA_LOGS_RPC_URL`) | server, buyer, scripts | yes | URL may hold an API key | live (simulated: optional override) |
+| `ENS_OPERATOR_PRIVATE_KEY` | server, scripts | yes | **yes** | live |
+| `SUPABASE_URL` | server | yes | no | live |
+| `SUPABASE_SERVICE_ROLE_KEY` (bypasses RLS) | server only | yes | **yes** | live |
+| `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, optional `PRIVY_JWT_VERIFICATION_KEY` | server | for `/me` and the console | secret: **yes** | live or simulated (optional) |
+| `BUYER_CONSOLE_ENABLED`, `BUYER_CONSOLE_ALLOWED_PRIVY_USER_IDS` | server | optional (default off) | no | live |
+| `CRONS_ENABLED`, `PAYOUTS_ENABLED`, `HCS_SUBMIT_ENABLED`, `NIGHTSHIFT_SIMULATION` | server | optional (safe defaults) | no | both |
+| `TRUST_PROXY_HOPS`, `UPLOAD_MAX_PER_MINUTE`, `UPLOAD_MAX_CONCURRENT_PER_CLIENT`, `UPLOAD_MAX_CONCURRENT_TOTAL`, `WORKER_REQUESTS_PER_MINUTE` | server | optional | no | both |
+| `BUYER_SERVER_URL`, `BUYER_HEDERA_ACCOUNT_ID` | buyer | for real buyer runs | no | live |
+| `BUYER_HEDERA_PRIVATE_KEY` | buyer | for real buyer runs | **yes** | live |
+| `NEXT_PUBLIC_SERVER_URL`, `NEXT_PUBLIC_PRIVY_APP_ID`, `NEXT_PUBLIC_SEPOLIA_RPC_URL`, `NEXT_PUBLIC_ENS_PARENT_NAME`, `NEXT_PUBLIC_NIGHTSHIFT_REGISTRAR_ADDRESS`, `NEXT_PUBLIC_HEDERA_HCS_TOPIC_ID` | web (`web/.env.local`) | server URL defaults to `http://localhost:8787` | no (public) | both |
+| `DEPLOYER_PRIVATE_KEY`, `ETHERSCAN_API_KEY`, `ENS_*`, `SMOKE_*`, `SEPOLIA_DRIP_WEI` | contract scripts | deploy and smoke only | keys: **yes** | live |
+| `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `SUPABASE_ACCESS_TOKEN` | Supabase CLI | migrations only | **yes** | live |
+| `BUYER_ZG_SK_KEY`, `ZG_TESTNET_*`, `HEDERA_NETWORK`, `TREASURY_PRIVATE_KEY`, `SPIKE_*` | spikes and experiments | no | keys: **yes** | — |
+
+**Safety defaults.** Crons, payouts and the paid console are **off** unless explicitly enabled. The server refuses to start in these cases:
+
+- `PAYOUTS_ENABLED=true` without `CRONS_ENABLED=true`.
+- Simulation mode in production.
+- Simulation mode with non-loopback payment or 0G URLs.
+
+A configuration error lists variable **names**, never values.
+
+---
+
+## Running NightShift locally
+
+The verified local workflow runs the **real** server and web app against **simulated** money, compute and storage.
+
+```bash
+# Terminal 1: NightShift server on :8787 + simulated facilitator, 0G (127.0.0.1:8403) and in-memory database
+pnpm dev:simulated
+
+# Terminal 2: web app on http://localhost:3000
+pnpm -C web dev
+
+# Terminal 3: one complete SIMULATED buyer run
+pnpm simulate:buyer
+```
+
+| Command | Starts | Real | Simulated |
+|---|---|---|---|
+| `pnpm dev:simulated` | Express server on **8787** (required: the workers' on-chain endpoints are `http://localhost:8787/a/<label>/run`); simulated 0G on **8403**; simulated facilitator on a random loopback port | server code; **read-only Sepolia** (the 3 workers are seeded from their live ENS records; registry status and expiry checked on every run) | payment settlement, 0G inference, database (resets on restart), HCS (off) |
+| `pnpm -C web dev` | Next.js on **3000** | all pages and API calls | whatever the backend simulates |
+| `pnpm simulate:buyer` | one buyer run against the stack | discovery, **live ENS verification**, quote checks, x402 client and policy, digest and job-status checks | the payment payload (never signed), Mirror Node confirmation, USDC balance |
+
+**Why no money moves:**
+
+- The stack forces its configuration, overriding any `.env` file.
+- It uses fresh dummy keys and a loopback-only facilitator and 0G endpoint, both enforced by config.
+- HCS, crons, payouts and the paid console are all off.
+- The buyer's simulated payment scheme never signs a Hedera transaction.
+- Settlement ids look like `SIMULATED-NOT-A-HEDERA-TX-1`, and no HashScan link is shown for them.
+
+Optional: to see the owner dashboard, start the stack with a Privy **development** app:
+
+```bash
+PRIVY_APP_ID=… PRIVY_APP_SECRET=… SIMULATED_OWNER_PRIVY_USER_ID=did:privy:<you> pnpm dev:simulated
+```
+
+Set `NEXT_PUBLIC_PRIVY_APP_ID` in `web/.env.local` too. Your Privy user then owns `tamil-scribe`.
+
+Running against **real** infrastructure (staging database, QA keys) is described in [`STAGING_SETUP.md`](STAGING_SETUP.md).
+
+---
+
+## Testing
+
+```bash
+pnpm test:all                       # buyer + server + web test suites
+pnpm -r --if-present typecheck      # all packages
+pnpm lint                           # ESLint
+pnpm --filter @nightshift/web build # production web build
+pnpm -C server test:e2e             # simulated end-to-end only
+pnpm -C server test:db              # migrations and RLS on embedded Postgres
+pnpm -C contracts test:unit         # Foundry (needs forge + restored submodules)
+```
+
+Latest recorded run (2026-11-06, [`FINAL_TEST_RESULTS.md`](FINAL_TEST_RESULTS.md)):
+
+| Suite | Result |
+|---|---|
+| Buyer | 48 tests |
+| Server | 140 tests |
+| Web | 25 tests |
+| Typecheck, lint, web build | pass |
+| `pnpm format:check` | fails on pre-existing unformatted files |
+
+| Kind | What it covers | Where |
+|---|---|---|
+| Unit | Pricing, quote signing, budget logic, 0G billing adapter, buyer decisions, spending rules, cron gating, config safety, rate limits, web formatting and parsers | `*/src/**/*.test.ts`, `web/lib/*.test.ts` |
+| Integration (in-process HTTP) | Routes with mocked dependencies: jobs, me, payouts, buyer console, directory | `server/src/routes/*.test.ts` |
+| Simulated end-to-end (16) | Real app, x402 middleware and buyer against a local facilitator and simulated 0G, DB and chain. Covers the happy path, refusal fallback, paused-worker lifecycle, expired or revoked workers, bad quotes, replay, concurrent duplicates, uncertain and definite settlement failures, missing billing, owner isolation with real ES256 token checks, and API contracts for each page | `server/src/e2e/` |
+| Database (10) | Migrations 0001–0006 on Postgres (PGlite), RLS as anon, authenticated and service_role, RPC grants, reservation TTL, payout idempotency, and the pre-0005 exposure | `server/src/db/migrations.test.ts` |
+| Contract | Unit, fuzz, invariant and fork tests | `contracts/test/` (**not run in the latest audit**) |
+| Live testnet | Read-only Sepolia and Mirror Node checks; historical paid runs | [`PROOFS.md`](PROOFS.md), [`FINAL_TEST_RESULTS.md`](FINAL_TEST_RESULTS.md) |
+
+**What the tests do not prove:**
+
+- That the current code works with the real facilitator, real 0G billing responses, real Hedera settlement or a hosted Supabase project.
+- That any hosted database has the migrations applied.
+- That web pages render correctly in a browser. Only HTTP responses and API data contracts are tested.
+- That contract tests pass.
+
+---
+
+## Demo
+
+Two demos are available, and both are clearly simulated:
+
+1. **Simulated stack** (recommended): `pnpm dev:simulated`, then `pnpm simulate:buyer`. Expected output:
+
+   ```
+   plan → discover (3) → verify ×3 (live Sepolia, ok) → decide kural → quote → refused (503 over_budget, not charged)
+        → decide tamil-scribe → quote 60000 → result "[SIMULATED 0G transcript …]"
+   success: true · jobVerified: true · settlementVerified: true · simulatedSettlementId: SIMULATED-NOT-A-HEDERA-TX-1
+   ```
+
+   The `kural` refusal is intentional: its daily 0G cap is 1 micro-USD, which demonstrates the budget guard and the buyer's fallback.
+
+2. **Deterministic script**: `pnpm -C scripts demo` prints a fixed walkthrough in which every line is labelled `[SIMULATED]`. It makes no network calls at all.
+
+| Element | In the demos |
+|---|---|
+| Sepolia ENS and registry verification | **Real**, read-only (demo 1) |
+| USDC payment / Hedera transaction | **Simulated**; no transaction exists |
+| 0G execution | **Simulated** transcript |
+| HCS | Not submitted |
+
+Real paid runs (`scripts/pay-run.ts`, `pnpm -C buyer start`, the paid console) spend testnet USDC and 0G credits. They require real credentials and the owner's explicit approval. Their historical results are documented in [`PROOFS.md`](PROOFS.md).
+
+---
+
+## Security
+
+| Control | Implementation |
+|---|---|
+| Signed quotes | Ed25519 over canonical claims; 120 s expiry; the key pair is validated at startup; the buyer verifies with the public key |
+| Replay protection | The quote nonce is inserted into a unique table **after** facilitator verification. Replays and concurrent duplicates are aborted, so there is one execution and one settlement (tested). |
+| Identity | The buyer trusts ENS, not the directory. The worker endpoint must match the configured server origin. The server re-checks registry status and expiry before running a job. |
+| Budget | Atomic Postgres reservations. Normal reservations expire after 15 min; uncertain-billing reservations are retained until reconciled. |
+| Payment verification | The payment must match the quote's pay-to, amount, asset and network on both server and buyer. The buyer checks the transfer on the Mirror Node and does not trust an HTTP 200. |
+| Uncertain outcomes | Unknown settlement or 0G billing becomes `needs_reconciliation`. The buyer keeps a run lock and never retries. Payouts in doubt become `uncertain` and are never resent. |
+| Owner authorization | Identity comes only from a verified Privy token (signature, issuer, audience, expiry). Ownership is enforced in the database query. Private fields (outputs, buyer accounts, errors, payout destinations) are never returned. |
+| Database | RLS on every table. After migration 0005, anon and authenticated roles cannot read jobs, payouts, workers, buyer events or secrets (tested on Postgres). Per-worker keys are AES-256-GCM encrypted. |
+| Rate limiting | Per-client limits per endpoint group, upload size and concurrency limits, and a 15 s health cache |
+| Cron controls | `CRONS_ENABLED` defaults to off; payouts need both flags |
+| Secrets | Server-only service-role, operator, quote-signing and master keys. Nothing secret is placed in `web/`. Config errors never echo values. |
+
+**Known limitations:**
+
+- **Migration 0005 must be applied** to any existing database. Until then, the 0001/0003 policies let the public anon key read jobs, payouts and buyer events, which include transcripts. Applying it to the shared project is pending owner authorization.
+- Rate limits are per process, not shared across instances.
+- The paid buyer console runs in the server process, so the server must hold the buyer's key while it is enabled.
+- The output digest proves integrity linkage, not model correctness or TEE attestation.
+- The quote verification key is distributed out of band; it is not anchored in ENS.
+- The payout transfer sender has only been exercised with mocks.
+
+---
+
+## Project status
+
+| Category | Items |
+|---|---|
+| **Live verified** (testnet) | Registrar and UserRegistry deployed on Sepolia; 3 workers registered; ENS records and reputation writes; HCS topic with job messages; historical x402 USDC payments and 0G Whisper jobs **on earlier code** ([`PROOFS.md`](PROOFS.md)) |
+| **Implemented, simulated and tested** | Signed quotes, replay protection, paused-worker lifecycle, budget reservations, x402 hooks, 0G billing adapter, digest, job-status capability, settlement classification and recovery, owner APIs, buyer verification, cron gating, rate limits, migrations and RLS on Postgres |
+| **Pending integration** | Applying migrations 0004–0006 to a hosted database; a dedicated staging environment; one approved live paid run on the current code (including real 0G billing fields and HCS digest); Foundry test run; agent renewal before 2026-12-05 |
+| **Not available** | Owner launch, pause, pricing and payout-account APIs (web launch is a blocked state); hosted deployment; multi-instance rate limiting; production release |
+
+Detailed evidence and go/no-go decisions are in [`FINAL_PROJECT_AUDIT.md`](FINAL_PROJECT_AUDIT.md). Prioritized tasks are in [`REMAINING_WORK.md`](REMAINING_WORK.md).
+
+---
+
+## Roadmap
+
+1. **Staging database:** a dedicated Supabase project (or `supabase start`) with migrations 0001–0006 and an RLS check.
+2. **Real 0G billing verification:** one approved job to confirm the documented `x_0g_trace.billing` fields against 0G usage history.
+3. **Real payment validation:** one approved low-value x402 payment on the current code, plus a live replay probe.
+4. **Foundry contract testing:** restore submodules and run the unit, fuzz, invariant and fork suites.
+5. **Hosted worker endpoint:** a public server URL, and the owner updates the workers' `agent-endpoint[x402]` ENS records (currently `localhost:8787`).
+6. **Controlled end-to-end testnet demo:** a rehearsed live run with HCS digest evidence; renew worker names.
+7. **Production preparation:** owner mutation APIs, a shared rate limiter, a separate buyer-console service, payout validation and security review.
+
+---
+
+## Contributing
+
+1. **Branch:** `git checkout -b feat/<short-name>` from the current development branch.
+2. **Install:** `pnpm install`.
+3. **Verify before pushing:** `pnpm test:all`, `pnpm -r --if-present typecheck` and `pnpm lint`. Format the files you touched with `pnpm exec prettier --write <files>`.
+4. **Commits:** Conventional Commits (`feat(server): …`, `fix(buyer): …`), one logical change each.
+5. **Pull requests:** describe what changed, how it was tested, and whether it affects payments, migrations or security. Payment, auth and migration changes need a second reviewer.
+6. **Secrets:** never commit `.env` / `.env.local`, keys, tokens or service-role keys, and never paste them into issues or PRs. Do not run paid scripts, migrations against shared databases, or contract deploy/smoke scripts without explicit approval.
+
+---
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `[config] invalid environment: …` | A `.env` value is missing or malformed; the message names the variable |
-| `fetch failed` / `ETIMEDOUT` to Alchemy on WSL | Already handled in code (`setDefaultAutoSelectFamilyAttemptTimeout`); check the RPC URL |
-| `Node.js detected but native WebSocket not found` | Already handled (server passes `ws` to supabase-js); update to the latest `main` |
-| `t.startsWith is not a function` | Duplicate Hedera SDK: `pnpm why @hiero-ledger/sdk`, then reinstall |
-| `forge` can't find `@ensdomains/...` | Submodules missing: `git submodule update --init --recursive` |
-| Paid run returns `503 over_budget` | The agent hit its daily 0G cap; it resets at 00:00 UTC |
+| `pnpm: command not found` (especially PowerShell) | `corepack enable && corepack prepare pnpm@10.34.7 --activate`, or prefix commands with `corepack pnpm` |
+| `[config] invalid environment: …` on `pnpm -C server start` | The server needs a full `.env` (names are listed in the error). For local work use `pnpm dev:simulated`, which needs none. |
+| `PAYOUTS_ENABLED … set CRONS_ENABLED=true` | Payouts run on the scheduler; enable both explicitly, or leave both off |
+| `EADDRINUSE` on 8787, 8403 or 3000 | Stop the other process. Port 8787 cannot change for the simulated stack, because the on-chain worker endpoints use it. |
+| Simulated stack lists no workers / `/ready` 503 | Sepolia or Mirror Node is unreachable; check internet access, or set `SEPOLIA_RPC_URL` to another Sepolia RPC |
+| `simulate:buyer`: "Start the simulated stack first" | Run `pnpm dev:simulated` first; it writes `server/.simulated-stack.json` |
+| Buyer preflight prints `NOT CONFIGURED` | Expected without config. Set `BUYER_SERVER_URL`, `SEPOLIA_RPC_URL`, `HEDERA_MIRROR_URL` and `NIGHTSHIFT_QUOTE_VERIFY_PUBLIC_KEY`, then run `pnpm -C buyer start -- --preflight` (read-only) |
+| Web shows "server unavailable" panels | Start the backend and check `NEXT_PUBLIC_SERVER_URL` in `web/.env.local` (default `http://localhost:8787`) |
+| Supabase errors or empty history on a real database | Apply migrations through `STAGING_SETUP.md` (never against a shared project without approval); `pnpm -C server test:db` validates the SQL locally |
+| `forge` cannot find `@ensdomains/…` / `forge-std` | Install Foundry, then `git submodule update --init --recursive` (restore `contracts/lib/forge-std` if its files were deleted). The `test` script uses POSIX shell syntax, so use WSL or Git Bash. |
+| `t.startsWith is not a function` | Duplicate Hedera SDK. The workspace pins `@hiero-ledger/sdk@2.85.0`; check with `pnpm why @hiero-ledger/sdk` and reinstall |
+| Paid run returns `503 over_budget` | The worker's daily 0G cap is used up; it resets at 00:00 UTC (`kural` always refuses by design) |
+| Job stuck in `needs_reconciliation` or a leftover `.buyer-run.lock` | Follow the reconciliation runbook in `STAGING_SETUP.md` §6; never re-run the paid request |
 
-## Deployed addresses (Sepolia / Hedera testnet)
+---
 
-| What | Address |
+## Documentation
+
+| Document | Contents |
 |---|---|
-| NightshiftRegistrar | [`0x9564fFd96FBaA1bF10836966990aCc88a9865705`](https://sepolia.etherscan.io/address/0x9564fFd96FBaA1bF10836966990aCc88a9865705#code) |
-| UserRegistry for `nightshift.eth` | [`0x68177337D020e03815bE894450914d7C94682425`](https://sepolia.etherscan.io/address/0x68177337D020e03815bE894450914d7C94682425) |
-| HCS job log topic | [`0.0.11129931`](https://hashscan.io/testnet/topic/0.0.11129931) |
-| USDC (Hedera testnet) | `0.0.429274` |
+| [`BACKEND_API_CONTRACT.md`](BACKEND_API_CONTRACT.md) | Every endpoint: auth, parameters, responses, errors, rate limits, configuration |
+| [`STAGING_SETUP.md`](STAGING_SETUP.md) | Environment matrix, simulated stack, staging database, test commands, reconciliation runbook |
+| [`TEAMMATE_INTEGRATION_TESTING_GUIDE.md`](TEAMMATE_INTEGRATION_TESTING_GUIDE.md) | Step-by-step frontend and backend QA on the simulated stack |
+| [`TEAMMATE_TESTING_GUIDE.md`](TEAMMATE_TESTING_GUIDE.md) | UI QA, safety rules, bug template |
+| [`FINAL_PROJECT_AUDIT.md`](FINAL_PROJECT_AUDIT.md) | Feature evidence matrix, security status, go/no-go decisions |
+| [`FINAL_TEST_RESULTS.md`](FINAL_TEST_RESULTS.md) | Exact commands, counts, live read-only checks |
+| [`REMAINING_WORK.md`](REMAINING_WORK.md) | Prioritized remaining tasks with completion criteria |
+| [`RELEASE.md`](RELEASE.md) | Release and operations guide (written before migration 0006 and the simulated stack) |
+| [`PROOFS.md`](PROOFS.md) | On-chain and API artifacts from earlier live runs |
+| [`FEEDBACK.md`](FEEDBACK.md) | Sponsor developer-experience notes |
+| [`buyer/README.md`](buyer/README.md) | Buyer verification boundaries and configuration |
+| [`design/HANDOFF.md`](design/HANDOFF.md) | UI design handoff |
 
-More in [`PROOFS.md`](PROOFS.md). Sponsor developer-experience notes are in [`FEEDBACK.md`](FEEDBACK.md).
+**License:** no license file is included in this repository yet.
+
+**Contact:** open an issue in this repository.
