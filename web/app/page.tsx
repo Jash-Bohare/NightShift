@@ -12,6 +12,7 @@ import { formatUsdMicro } from "../lib/money";
 import { truncateMiddle } from "../lib/truncate";
 import { hashscanTransactionUrl, hcsMessageUrl } from "../lib/explorers";
 import { publicEnv } from "../lib/public-env";
+import { useClock } from "../lib/use-clock";
 
 function useLatestJob() {
   return useQuery({
@@ -22,6 +23,9 @@ function useLatestJob() {
 }
 
 export default function Home() {
+  // The page is prerendered at build time, so "today" must come from the live clock in the
+  // browser; a date computed during render would be frozen to the build day.
+  const now = useClock();
   const stats = useQuery({
     queryKey: ["nightshift-stats"],
     queryFn: ({ signal }) => serverGet<NightshiftStats>("/stats", signal),
@@ -40,7 +44,9 @@ export default function Home() {
       <div className="wrap">
         <div className="gazette-mast mono">
           <span>THE NIGHT SHIFT GAZETTE</span>
-          <span className="hide-mobile">{new Date().toISOString().slice(0, 10)} · UTC</span>
+          <span className="hide-mobile">
+            {now === null ? "today" : new Date(now).toISOString().slice(0, 10)} · UTC
+          </span>
           <span>{stats.data ? `${stats.data.agents} WORKERS ON DUTY` : "LIVE SHIFT DATA"}</span>
         </div>
       </div>
