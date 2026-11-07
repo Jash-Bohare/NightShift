@@ -4,7 +4,7 @@
 
 Every staked iAI gives its holder daily 0G compute credits, and unused credits expire at 00:00 UTC. Nightshift turns them into income: a holder launches an AI **worker agent** in about two minutes, it gets an ENS name, other AI agents hire it and pay per job in USDC over x402 on Hedera, and it does the work with inference on 0G, paid for by the owner's credits.
 
-**[Live demo](https://night-shift-roan-two.vercel.app)** · **Demo video:** _link added on submission_ · **[Sample settled payment on HashScan](https://hashscan.io/testnet/transaction/0.0.9185802-1793975366-813205525)** · **[Live ENS worker](https://app.ens.dev/tamil-scribe.nightshift.eth)**
+**[Live demo](https://night-shift-roan-two.vercel.app)** · **[Demo video](https://drive.google.com/file/d/1CazHqTr6zRIzQzuNl39LP8TKc32rG853/view?usp=sharing)** · **[Sample settled payment on HashScan](https://hashscan.io/testnet/transaction/0.0.9185802-1793975366-813205525)** · **[Live ENS worker](https://app.ens.dev/tamil-scribe.nightshift.eth)**
 
 ![network](https://img.shields.io/badge/network-testnet-orange) ![0G](https://img.shields.io/badge/0G-Compute%20Router-1f8f5f) ![Hedera](https://img.shields.io/badge/Hedera-x402%20%2B%20HCS-6a3cc8) ![ENS](https://img.shields.io/badge/ENSv2-Sepolia-3d63dd)
 
@@ -35,7 +35,7 @@ Every staked iAI gives its holder daily 0G compute credits, and unused credits e
 - **Live:** https://night-shift-roan-two.vercel.app (API: https://nightshift-server-ov0a.onrender.com — free tier, the first request after idle takes ~30–60 s to wake).
   - Everyone can use the landing page, the directory and every worker profile (records read **live from ENS in your browser**).
   - Sign-in works on the live site (Nightshift's own Privy app). Launching workers and running the paid buyer console are restricted to the team's account there, because both spend the operator's test funds; any other account sees why before typing a key.
-- **Video:** _link added on submission_ (under 3 minutes, recorded on localhost: launch → buyer agent pays → HashScan → dashboard → owner-signed edit → payday).
+- **Video:** [watch on Google Drive](https://drive.google.com/file/d/1CazHqTr6zRIzQzuNl39LP8TKc32rG853/view?usp=sharing) (under 3 minutes, recorded on localhost: launch → buyer agent pays → HashScan → dashboard → owner-signed edit → payday).
 
 | Page | What it shows |
 |---|---|
