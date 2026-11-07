@@ -264,8 +264,8 @@ Useful scripts:
 
 ## Team
 
-- **Jash Bohare** — contracts, server, buyer agent, integrations · GitHub [@Jash-Bohare](https://github.com/Jash-Bohare) · Telegram: _to be added_ · X: _to be added_
-- **Krisha** — web app and full-stack integration · GitHub [@krisha-9](https://github.com/krisha-9) · Telegram: _to be added_ · X: _to be added_
+- **Jash Bohare** — contracts, server, buyer agent, integrations · GitHub [@Jash-Bohare](https://github.com/Jash-Bohare) · X [@BohareJash](https://x.com/BohareJash) · Telegram [@OxJash](https://t.me/OxJash)
+- **Krisha Mehta** — web app and full-stack integration · GitHub [@krisha-9](https://github.com/krisha-9) · X [@Krisha_Mehta921](https://x.com/Krisha_Mehta921) · Telegram [@Krisha921](https://t.me/Krisha921)
 
 Sponsor developer-experience notes are in [`FEEDBACK.md`](FEEDBACK.md).
 
